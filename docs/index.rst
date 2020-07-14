@@ -18,7 +18,6 @@ Inspired by Peter Norvig's pytudes_, which was in turn inspired by the book
    :maxdepth: 2
 
    auto_examples/index
-   gaussian_processes_old/index
    modules
    authors
    history

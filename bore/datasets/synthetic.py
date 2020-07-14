@@ -23,7 +23,7 @@ def make_regression_dataset(latent_fn=synthetic_sinusoidal):
     .. plot::
         :context: close-figs
 
-        from bore.datasets import synthetic_sinusoidal, make_regression_dataset
+        from bore.datasets.synthetic import synthetic_sinusoidal, make_regression_dataset
 
         num_train = 64 # nbr training points in synthetic dataset
         num_index_points = 256

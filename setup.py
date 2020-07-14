@@ -31,7 +31,7 @@ setup(
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
     ],
-    description="Just as natural bore grow from grains of sand that irritate oysters, machine learning bore have grown from real problems that have irritated real machine learners.",
+    description="Bayesian Optimization as Density Ratio Estimation",
     entry_points={
         'console_scripts': [
             'bore=bore.cli:main',
