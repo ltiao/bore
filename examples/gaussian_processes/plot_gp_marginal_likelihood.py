@@ -14,9 +14,9 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from mpl_toolkits.mplot3d import Axes3D
-from etudes.datasets import synthetic_sinusoidal, make_regression_dataset
-from etudes.plotting import fill_between_stddev
-from etudes.gaussian_process import dataframe_from_gp_summary
+from bore.datasets import synthetic_sinusoidal, make_regression_dataset
+from bore.plotting import fill_between_stddev
+from bore.gaussian_process import dataframe_from_gp_summary
 # %%
 
 # shortcuts

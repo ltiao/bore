@@ -10,7 +10,7 @@ Hello world
 import numpy as np
 import seaborn as sns
 
-from etudes.datasets import load_bee_dance_dataframe
+from bore.datasets import load_bee_dance_dataframe
 
 golden_ratio = 0.5 * (1 + np.sqrt(5))
 

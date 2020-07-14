@@ -9,7 +9,7 @@ Hello world
 
 import seaborn as sns
 
-from etudes.datasets import mauna_loa_load_dataframe
+from bore.datasets import mauna_loa_load_dataframe
 
 # %%
 

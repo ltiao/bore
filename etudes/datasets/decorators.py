@@ -13,8 +13,8 @@ def binarize(positive_label=3, negative_label=5):
 
         import tensorflow as tf
 
-        from etudes.datasets import binarize
-        from etudes.plotting import plot_image_grid
+        from bore.datasets import binarize
+        from bore.plotting import plot_image_grid
 
         @binarize(positive_label=2, negative_label=7)
         def binary_mnist_load_data():

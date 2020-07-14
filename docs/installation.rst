@@ -8,13 +8,13 @@ Installation
 Stable release
 --------------
 
-To install Machine Learning Études, run this command in your terminal:
+To install bore, run this command in your terminal:
 
 .. code-block:: console
 
-    $ pip install etudes
+    $ pip install bore
 
-This is the preferred method to install Machine Learning Études, as it will always install the most recent stable release.
+This is the preferred method to install bore, as it will always install the most recent stable release.
 
 If you don't have `pip`_ installed, this `Python installation guide`_ can guide
 you through the process.
@@ -26,19 +26,19 @@ you through the process.
 From sources
 ------------
 
-The sources for Machine Learning Études can be downloaded from the `Github repo`_.
+The sources for bore can be downloaded from the `Github repo`_.
 
 You can either clone the public repository:
 
 .. code-block:: console
 
-    $ git clone git://github.com/ltiao/etudes
+    $ git clone git://github.com/ltiao/bore
 
 Or download the `tarball`_:
 
 .. code-block:: console
 
-    $ curl -OJL https://github.com/ltiao/etudes/tarball/master
+    $ curl -OJL https://github.com/ltiao/bore/tarball/master
 
 Once you have a copy of the source, you can install it with:
 
@@ -47,5 +47,5 @@ Once you have a copy of the source, you can install it with:
     $ python setup.py install
 
 
-.. _Github repo: https://github.com/ltiao/etudes
-.. _tarball: https://github.com/ltiao/etudes/tarball/master
+.. _Github repo: https://github.com/ltiao/bore
+.. _tarball: https://github.com/ltiao/bore/tarball/master

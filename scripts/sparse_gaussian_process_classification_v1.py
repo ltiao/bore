@@ -1,4 +1,4 @@
-"""Console script for etudes."""
+"""Console script for bore."""
 import sys
 import click
 
@@ -11,9 +11,9 @@ from tensorflow.keras.metrics import binary_accuracy
 from collections import defaultdict
 from tqdm import trange
 
-from etudes.utils import (get_distribution_pair, get_kl_weight,
+from bore.utils import (get_distribution_pair, get_kl_weight,
                           get_steps_per_epoch, save_results, DistributionPair)
-from etudes.datasets import make_classification_dataset
+from bore.datasets import make_classification_dataset
 
 tfd = tfp.distributions
 kernels = tfp.math.psd_kernels

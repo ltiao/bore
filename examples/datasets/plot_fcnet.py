@@ -10,7 +10,7 @@ Hello world
 import seaborn as sns
 import h5py
 
-from etudes.datasets import read_fcnet_data
+from bore.datasets import read_fcnet_data
 # %%
 
 name = "protein_structure"

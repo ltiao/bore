@@ -15,8 +15,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
-from etudes.datasets import make_regression_dataset
-from etudes.plotting import fill_between_stddev
+from bore.datasets import make_regression_dataset
+from bore.plotting import fill_between_stddev
 # %%
 
 # shortcuts

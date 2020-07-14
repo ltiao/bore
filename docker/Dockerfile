@@ -30,7 +30,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements*.txt ./
 RUN python -m pip install --upgrade pip==20.1.1 keyrings.alt==3.4.0 && \
     python -m pip install --no-cache-dir -r requirements_dev.txt && \
-	python -m pip install --no-cache-dir -r requirements.txt &&
+	python -m pip install --no-cache-dir -r requirements.txt
 
 RUN mkdir -p /usr/src/app
 

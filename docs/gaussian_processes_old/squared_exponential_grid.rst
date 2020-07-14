@@ -17,7 +17,7 @@ Squared Exponential Kernel
     import seaborn as sns
     import pandas as pd
 
-    from etudes.gaussian_process import gp_sample_custom, dataframe_from_gp_samples
+    from bore.gaussian_process import gp_sample_custom, dataframe_from_gp_samples
 
     # shortcuts
     tfd = tfp.distributions

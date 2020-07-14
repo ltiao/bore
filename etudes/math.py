@@ -16,7 +16,7 @@ def perlin(x, y, octaves=1, persistence=0.5, lacunarity=2.0, repeatx=1024,
     .. plot::
         :context: close-figs
 
-        # from etudes.math import perlin
+        # from bore.math import perlin
         from noise import pnoise2
 
         step_size = 2.0

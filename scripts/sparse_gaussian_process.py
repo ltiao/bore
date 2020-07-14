@@ -1,4 +1,4 @@
-"""Console script for etudes."""
+"""Console script for bore."""
 import os
 import sys
 import click
@@ -12,7 +12,7 @@ import tensorflow_probability as tfp
 from collections import defaultdict
 from pathlib import Path
 
-from etudes.datasets import make_dataset, synthetic_sinusoidal
+from bore.datasets import make_dataset, synthetic_sinusoidal
 
 tf.disable_v2_behavior()
 

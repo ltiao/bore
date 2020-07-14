@@ -10,7 +10,7 @@ Hello world
 import networkx as nx
 import matplotlib.pyplot as plt
 
-from etudes.datasets.networks import load_dataset
+from bore.datasets.networks import load_dataset
 # %%
 
 X, y, A = load_dataset("cora", data_home="../../datasets")

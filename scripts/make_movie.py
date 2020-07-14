@@ -1,4 +1,4 @@
-"""Console script for etudes."""
+"""Console script for bore."""
 import os
 import sys
 import click
@@ -15,7 +15,7 @@ import seaborn as sns
 
 from matplotlib import animation
 from pathlib import Path
-from etudes.datasets import make_dataset, synthetic_sinusoidal
+from bore.datasets import make_dataset, synthetic_sinusoidal
 
 GOLDEN_RATIO = 0.5 * (1 + np.sqrt(5))
 golden_size = lambda width: (width, width / GOLDEN_RATIO)

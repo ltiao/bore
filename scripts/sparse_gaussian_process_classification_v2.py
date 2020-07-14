@@ -1,4 +1,4 @@
-"""Console script for etudes."""
+"""Console script for bore."""
 import sys
 import click
 
@@ -10,7 +10,7 @@ import tensorflow_probability as tfp
 from collections import defaultdict
 from tqdm import trange
 
-from etudes.utils import (get_distribution_pair, get_kl_weight, to_numpy,
+from bore.utils import (get_distribution_pair, get_kl_weight, to_numpy,
                           get_steps_per_epoch, save_results, DistributionPair)
 
 tfd = tfp.distributions

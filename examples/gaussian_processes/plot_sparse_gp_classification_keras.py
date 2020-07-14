@@ -21,9 +21,9 @@ import pandas as pd
 from tensorflow.keras.layers import Layer, InputLayer
 from tensorflow.keras.initializers import Identity, Constant
 
-from etudes.datasets import make_classification_dataset
-from etudes.plotting import fill_between_stddev
-from etudes.utils import get_kl_weight
+from bore.datasets import make_classification_dataset
+from bore.plotting import fill_between_stddev
+from bore.utils import get_kl_weight
 
 from collections import defaultdict
 

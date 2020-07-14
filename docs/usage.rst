@@ -2,6 +2,6 @@
 Usage
 =====
 
-To use Machine Learning Études in a project::
+To use bore in a project::
 
-    import etudes
+    import bore

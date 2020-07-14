@@ -13,7 +13,7 @@ import tensorflow_probability as tfp
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from etudes.gaussian_process import gp_sample_custom, dataframe_from_gp_samples
+from bore.gaussian_process import gp_sample_custom, dataframe_from_gp_samples
 
 # %%
 

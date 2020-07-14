@@ -1,4 +1,4 @@
-* Machine Learning Études version:
+* bore version:
 * Python version:
 * Operating System:
 

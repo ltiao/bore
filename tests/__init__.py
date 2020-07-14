@@ -1,1 +1,1 @@
-"""Unit test package for etudes."""
+"""Unit test package for bore."""

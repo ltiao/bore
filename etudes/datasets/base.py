@@ -114,7 +114,7 @@ def coal_mining_disasters_load_data(base_dir="../datasets/"):
     .. plot::
         :context: close-figs
 
-        from etudes.datasets import coal_mining_disasters_load_data
+        from bore.datasets import coal_mining_disasters_load_data
 
         X, y = coal_mining_disasters_load_data()
 
@@ -148,7 +148,7 @@ def mauna_loa_load_dataframe(base_dir="../datasets/"):
         :context: close-figs
 
         import seaborn as sns
-        from etudes.datasets import mauna_loa_load_dataframe
+        from bore.datasets import mauna_loa_load_dataframe
 
         data = mauna_loa_load_dataframe()
 
