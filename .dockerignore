@@ -1,0 +1,11 @@
+scratch/*
+scripts/*
+examples/*
+datasets/*
+checkpoints/*
+logs/*
+
+**/.git
+
+# Sphinx documentation
+docs/_build/*

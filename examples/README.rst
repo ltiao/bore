@@ -1,0 +1,4 @@
+Collection
+==========
+
+Here be examples.
