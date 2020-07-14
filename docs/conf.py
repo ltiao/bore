@@ -53,7 +53,7 @@ source_suffix = '.rst'
 master_doc = 'index'
 
 # General information about the project.
-project = 'BORE: Bayesian Optimization as Density Ratio Estimation'
+project = 'BORE'
 copyright = "2019-{}, Louis Tiao".format(time.strftime("%Y"))
 author = "Louis C. Tiao"
 

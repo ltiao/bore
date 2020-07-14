@@ -28,9 +28,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # TODO: copy to temporary dir rather than unknown current dir
 COPY requirements*.txt ./
-RUN python -m pip install --upgrade pip==20.1.1 keyrings.alt==3.4.0 && \
+RUN python -m pip install --no-cache-dir --upgrade pip==20.1.1 keyrings.alt==3.4.0 && \
     python -m pip install --no-cache-dir -r requirements_dev.txt && \
 	python -m pip install --no-cache-dir -r requirements.txt
+
+# Install HPOBench
+RUN python -m pip install --no-cache-dir Cython==0.29.21
+COPY external/nas_benchmarks /tmp/nas_benchmarks
+WORKDIR /tmp/nas_benchmarks
+RUN python -m pip install -e .
+
+# Install HpBandSter
+RUN python -m pip install --no-cache-dir hpbandster
 
 RUN mkdir -p /usr/src/app
 
