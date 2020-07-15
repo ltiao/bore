@@ -32,14 +32,14 @@ RUN python -m pip install --no-cache-dir --upgrade pip==20.1.1 keyrings.alt==3.4
     python -m pip install --no-cache-dir -r requirements_dev.txt && \
 	python -m pip install --no-cache-dir -r requirements.txt
 
-# Install HPOBench
-RUN python -m pip install --no-cache-dir Cython==0.29.21
+# Install HpBandSter and HPO Bench
+RUN python -m pip install --no-cache-dir Cython==0.29.21 && \
+    python -m pip install --no-cache-dir Pyro4 serpent ConfigSpace netifaces h5py
+COPY external/HpBandSter /tmp/HpBandSter
 COPY external/nas_benchmarks /tmp/nas_benchmarks
-WORKDIR /tmp/nas_benchmarks
-RUN python -m pip install -e .
-
-# Install HpBandSter
-RUN python -m pip install --no-cache-dir hpbandster
+# RUN python -m pip install --no-cache-dir hpbandster
+RUN python -m pip install --no-deps -e /tmp/HpBandSter && \
+    python -m pip install --no-deps -e /tmp/nas_benchmarks
 
 RUN mkdir -p /usr/src/app
 
