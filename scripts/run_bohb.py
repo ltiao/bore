@@ -2,6 +2,7 @@ import sys
 import click
 import json
 
+import pandas as pd
 import ConfigSpace
 import hpbandster.core.nameserver as hpns
 
@@ -18,6 +19,27 @@ OUTPUT_DIR = "results/"
 INPUT_DIR = "datasets/fcnet_tabular_benchmarks"
 
 
+def dataframe_from_result(result):
+
+    rows = []
+
+    for task, config_id in enumerate(result.data):
+
+        d = result.data[config_id]
+        bracket, _, _ = config_id
+
+        for epoch in d.results:
+
+            rows.append(dict(task=task,
+                             bracket=bracket,
+                             epoch=int(epoch),
+                             error=d.results[epoch]["loss"],
+                             submitted=d.time_stamps[epoch]["submitted"],
+                             runtime=d.time_stamps[epoch]["finished"]))
+
+    return pd.DataFrame(rows)
+
+
 @click.command()
 @click.argument("name")
 @click.option("--benchmark-name", default="protein_structure")
@@ -32,13 +54,14 @@ def main(name, benchmark_name, input_dir, output_dir):
     output_path = Path(output_dir).joinpath(name)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    num_iterations = 10
+    # TODO: Make these command-line arguments
+    num_iterations = 25
     eta = 3
     num_samples = 64
     random_fraction = 1/3
     bandwidth_factor = 3
     min_bandwidth = 0.3
-    min_budget = 100
+    min_budget = 3
     max_budget = 100
 
     if benchmark_name == "protein_structure":
@@ -122,6 +145,9 @@ def main(name, benchmark_name, input_dir, output_dir):
 
     with open(output_path.joinpath("results.json"), 'w') as fh:
         json.dump(res, fh)
+
+    df = dataframe_from_result(results)
+    df.to_csv(output_path.joinpath("results.csv"))
 
     return 0
 
