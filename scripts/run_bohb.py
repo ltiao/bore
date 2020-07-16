@@ -34,6 +34,7 @@ def dataframe_from_result(result):
                              bracket=bracket,
                              epoch=int(epoch),
                              error=d.results[epoch]["loss"],
+                             cost=d.results[epoch]["info"],
                              submitted=d.time_stamps[epoch]["submitted"],
                              runtime=d.time_stamps[epoch]["finished"]))
 
@@ -55,7 +56,7 @@ def main(name, benchmark_name, input_dir, output_dir):
     output_path.mkdir(parents=True, exist_ok=True)
 
     # TODO: Make these command-line arguments
-    num_iterations = 25
+    num_iterations = 10
     eta = 3
     num_samples = 64
     random_fraction = 1/3
@@ -142,6 +143,7 @@ def main(name, benchmark_name, input_dir, output_dir):
     NS.shutdown()
 
     res = b.get_results()
+    print(b.get_best_configuration())
 
     with open(output_path.joinpath("results.json"), 'w') as fh:
         json.dump(res, fh)
