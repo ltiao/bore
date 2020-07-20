@@ -56,13 +56,13 @@ def main(name, benchmark_name, input_dir, output_dir):
     output_path.mkdir(parents=True, exist_ok=True)
 
     # TODO: Make these command-line arguments
-    num_iterations = 10
+    num_iterations = 300
     eta = 3
     num_samples = 64
     random_fraction = 1/3
     bandwidth_factor = 3
     min_bandwidth = 0.3
-    min_budget = 3
+    min_budget = 100
     max_budget = 100
 
     if benchmark_name == "protein_structure":
