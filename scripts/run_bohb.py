@@ -124,7 +124,7 @@ def main(name, benchmark_name, input_dir, output_dir):
         w.run(background=True)
         workers.append(w)
 
-    bohb = BOHB(configspace=cs,
+    bohb = BOHB(config_space=cs,
                 run_id=hb_run_id,
                 eta=eta,
                 min_budget=min_budget,

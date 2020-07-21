@@ -1,6 +1,4 @@
 import tensorflow as tf
-import tensorflow_probability as tfp
-# import tensorflow.keras.backend as K
 
 from functools import wraps
 
@@ -32,7 +30,8 @@ def value_and_gradient(value_fn):
     def value_and_gradient_fn(x):
 
         # Equivalent to `tfp.math.value_and_gradient(value_fn, x)`, with the
-        # only difference that the gradients preserve their `dtype`
+        # only difference that the gradients preserve their `dtype` rather than
+        # casting to tf.float32, which is problematic for scipy optimize
         with tf.GradientTape(watch_accessed_variables=False) as tape:
             tape.watch(x)
             val = value_fn(x)
@@ -49,6 +48,7 @@ def numpy_io(fn):
     @wraps(fn)
     def new_fn(input):
 
+        # TODO: support further arguments here
         input_tensor = tf.convert_to_tensor(input)
         output_tensor = fn(input_tensor)
 
