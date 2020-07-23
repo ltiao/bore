@@ -1,6 +1,56 @@
 import pandas as pd
+from numbers import Integral
 
 from pathlib import Path
+
+
+def dataframe_from_result(result):
+
+    rows = []
+
+    for task, config_id in enumerate(result.data):
+
+        d = result.data[config_id]
+        bracket, _, _ = config_id
+
+        for epoch in d.results:
+
+            rows.append(dict(task=task,
+                             bracket=bracket,
+                             epoch=int(epoch),
+                             error=d.results[epoch]["loss"],
+                             cost=d.results[epoch]["info"],
+                             submitted=d.time_stamps[epoch]["submitted"],
+                             runtime=d.time_stamps[epoch]["finished"]))
+
+    return pd.DataFrame(rows)
+
+
+def load_runs(base_dir, runs=[], error_min=None):
+
+    base_path = Path(base_dir)
+
+    frames = []
+
+    if isinstance(runs, Integral):
+        runs = range(runs)
+
+    for run in runs:
+
+        path = base_path.joinpath(f"{run:03d}.csv")
+        frame = pd.read_csv(path, index_col=0).assign(run=run)
+
+        best = frame.error.cummin()
+        frame = frame.assign(best=best)
+
+        if error_min is not None:
+            regret = (error_min - frame.error).abs()
+            regret_best = regret.cummin()
+            frame = frame.assign(regret=regret, regret_best=regret_best)
+
+        frames.append(frame)
+
+    return pd.concat(frames, axis="index", ignore_index=True, sort=True)
 
 
 def preprocess(df):

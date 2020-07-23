@@ -6,7 +6,7 @@ import pandas as pd
 import ConfigSpace
 import hpbandster.core.nameserver as hpns
 
-from hpbandster.optimizers.bohb import BOHB
+from hpbandster.optimizers.bohb import BOHB, RandomSearch
 from hpbandster.core.worker import Worker
 
 from tabular_benchmarks import (FCNetProteinStructureBenchmark,
@@ -56,7 +56,7 @@ def main(name, benchmark_name, input_dir, output_dir):
     output_path.mkdir(parents=True, exist_ok=True)
 
     # TODO: Make these command-line arguments
-    num_iterations = 300
+    num_iterations = 20
     eta = 3
     num_samples = 64
     random_fraction = 1/3
