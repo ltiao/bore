@@ -33,7 +33,7 @@ def main(name, output_dir):
     gamma = 0.15
     num_random_init = 10
     batch_size = 64
-    num_steps_per_iter = 800
+    num_steps_per_iter = 50
     optimizer = "adam"
     num_layers = 2
     num_units = 32

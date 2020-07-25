@@ -54,7 +54,7 @@ master_doc = 'index'
 
 # General information about the project.
 project = 'BORE'
-copyright = "2019-{}, Louis Tiao".format(time.strftime("%Y"))
+copyright = f"{time.strftime('%Y')}, Louis Tiao"
 author = "Louis C. Tiao"
 
 # The version info for the project you're documenting, acts as replacement
@@ -103,7 +103,7 @@ html_theme_path = sphinx_bootstrap_theme.get_html_theme_path()
 #
 html_theme_options = {
     "bootstrap_version": "3",
-    "bootswatch_theme": "paper",
+    "bootswatch_theme": "cosmo",
     'navbar_links': [
         ("Louis Tiao", "https://tiao.io", True),
         ("Collection", "auto_examples/index")

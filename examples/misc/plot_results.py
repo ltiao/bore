@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """
-Test
-====
+Results
+=======
 
 Hello world
 """
-# sphinx_gallery_thumbnail_number = 3
+# sphinx_gallery_thumbnail_number = 4
 
 import pandas as pd
 
@@ -19,7 +19,7 @@ from pathlib import Path
 # constants
 num_runs = 20
 error_min = -3.32237
-optimizers = ["random", "tpe", "bore", "gamma15"]
+optimizers = ["random", "tpe", "bore", "gamma15", "borefast"]
 base_dir = Path("../../results")
 # %%
 frames = []
