@@ -114,7 +114,7 @@ class DRE(base_config_generator):
             # TODO: how to seed this source of randomness?
             return (self.configspace.sample_configuration().get_dictionary(), {})
 
-        @numpy_io
+        @numpy_io()
         @value_and_gradient
         @unbatch
         def func(x):

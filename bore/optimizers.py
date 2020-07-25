@@ -31,13 +31,12 @@ def multi_start(num_restarts, unique=True):
             results = []
             for x_init in x_inits:
                 res = minimizer_fn(fn, x0=x_init, bounds=bounds)
-
                 # TODO(LT): is this a little overbearing? The caller can easily
                 #   deal with duplicates themselves.
-                #   Further, there are more efficient data structures for this,
-                #   such as a KD-Tree or Locality Sensitive Hashing (LSH),
-                #   but these are premature optimizations at this time.
-                #   Should support other options for `atol`.
+                #   - Further, there are more efficient data structures for
+                #     this, such as a KD-Tree or Locality Sensitive Hashing
+                #     (LSH), but these are premature optimizations at this time
+                #   - Should support other options for `atol`.
                 if unique and any(np.allclose(res_prev.x, res.x, atol=1e-6)
                                   for res_prev in results):
                     continue
@@ -58,7 +57,8 @@ def multi_start(num_restarts, unique=True):
 @multi_start(num_restarts=10, unique=True)
 def multi_start_lbfgs_minimizer(fn, x0, bounds):
     """
-    Wrapper around SciPy L-BFGS-B minimizer with sensible defaults specified.
+    Wrapper around SciPy L-BFGS-B minimizer with a simplified interface and
+    sensible defaults specified.
     """
     # TODO(LT): L-BFGS-B has its own set of `tol` options so I suspect the
     #   following `tol=1e-8` is completely ignored.

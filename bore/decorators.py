@@ -43,15 +43,20 @@ def value_and_gradient(value_fn):
     return value_and_gradient_fn
 
 
-def numpy_io(fn):
+def numpy_io(dtype=None, dtype_hint=None, name=None):
 
-    @wraps(fn)
-    def new_fn(input):
+    def decorator(fn):
 
-        # TODO: support further arguments here
-        input_tensor = tf.convert_to_tensor(input)
-        output_tensor = fn(input_tensor)
+        @wraps(fn)
+        def new_fn(input):
 
-        return [output.numpy() for output in output_tensor]
+            input_tensor = tf.convert_to_tensor(input, dtype=dtype,
+                                                dtype_hint=dtype_hint,
+                                                name=name)
+            output_tensor = fn(input_tensor)
 
-    return new_fn
+            return [output.numpy() for output in output_tensor]
+
+        return new_fn
+
+    return decorator
