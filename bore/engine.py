@@ -10,7 +10,7 @@ from .types import DenseConfigurationSpace, DenseConfiguration
 from .models import DenseSequential
 from .losses import binary_crossentropy_from_logits
 from .decorators import unbatch, value_and_gradient, numpy_io
-from .optimizers import multi_start, deduplicate
+from .optimizers import multi_start
 
 # from hpbandster.core.master import Master
 from hpbandster.optimizers.hyperband import HyperBand
@@ -37,8 +37,8 @@ class BORE(HyperBand):
         # replace the config_generator!
         super(HyperBand, self).__init__(config_generator=cg, **kwargs)
 
-        # (LT): the following had to be copy-pasted as HpBandSter doesn't
-        # really subscribe to the DRY design philosophy...
+        # (LT): the following had to be copy-pasted as it is hard to
+        # follow the DRY design philosophy within the HpBandSter framework...
 
         # Hyperband related stuff
         self.eta = eta
@@ -85,7 +85,7 @@ class DRE(base_config_generator):
                                      num_layers=num_layers,
                                      num_units=num_units,
                                      layer_kws=dict(activation=activation,
-                                                    kernel_regularizer=l2(1e-4)))
+                                                    kernel_regularizer=l2(1e-4))) # TODO(LT): make this an argument
         self.model.compile(optimizer=optimizer, metrics=["accuracy"],
                            loss=binary_crossentropy_from_logits)
 
@@ -125,7 +125,7 @@ class DRE(base_config_generator):
         #   inside the k-ball of any previously evaluated candidate.
         #   Clever ways of doing this would involve data structs. like KD-trees
         #   or locality sensitive hashing (LSH), but these are premature
-        #   optimizations at this point. 
+        #   optimizations at this point.
         dataset_size = len(self.config_arrs)
 
         config_random = self.config_space.sample_configuration()
@@ -136,6 +136,8 @@ class DRE(base_config_generator):
                               " initial runs. Returning random candidate...")
             return (config_random_dict, {})
 
+        # TODO(LT): The following three assignments can all be done at
+        #   initialization time
         minimize = self.make_minimizer(num_restarts=self.num_restarts)
         func = self.make_minimizee()
         bounds = self.config_space.get_bounds()
