@@ -121,6 +121,11 @@ class DRE(base_config_generator):
 
     def get_config(self, budget):
 
+        # TODO(LT): Add a check to make sure the maximum solution isn't within
+        #   inside the k-ball of any previously evaluated candidate.
+        #   Clever ways of doing this would involve data structs. like KD-trees
+        #   or locality sensitive hashing (LSH), but these are premature
+        #   optimizations at this point. 
         dataset_size = len(self.config_arrs)
 
         config_random = self.config_space.sample_configuration()
