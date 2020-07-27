@@ -1,4 +1,5 @@
 import numpy as np
+import tensorflow as tf
 
 # from tensorflow.keras.initializers import GlorotUniform
 from tensorflow.keras.regularizers import l2
@@ -9,6 +10,7 @@ from .types import DenseConfigurationSpace, DenseConfiguration
 from .models import DenseSequential
 from .losses import binary_crossentropy_from_logits
 from .decorators import unbatch, value_and_gradient, numpy_io
+from .optimizers import multi_start, deduplicate
 
 # from hpbandster.core.master import Master
 from hpbandster.optimizers.hyperband import HyperBand
@@ -18,7 +20,7 @@ from hpbandster.core.base_config_generator import base_config_generator
 class BORE(HyperBand):
 
     def __init__(self, config_space, eta=3, min_budget=0.01, max_budget=1,
-                 gamma=None, num_random_init=10, batch_size=64,
+                 gamma=None, num_random_init=10, num_restarts=10, batch_size=64,
                  num_steps_per_iter=1000, optimizer="adam",
                  num_layers=2, num_units=32, activation="relu", seed=None,
                  **kwargs):
@@ -27,7 +29,7 @@ class BORE(HyperBand):
             gamma = 1/eta
 
         cg = DRE(config_space=config_space,
-                 gamma=gamma, num_random_init=num_random_init,
+                 gamma=gamma, num_random_init=num_random_init, num_restarts=num_restarts,
                  batch_size=batch_size, num_steps_per_iter=num_steps_per_iter,
                  optimizer=optimizer, num_layers=num_layers, num_units=num_units,
                  activation=activation, seed=seed)
@@ -65,9 +67,9 @@ class DRE(base_config_generator):
     class to implement random sampling from a ConfigSpace
     """
     def __init__(self, config_space, gamma=1/3, num_random_init=10,
-                 batch_size=64, num_steps_per_iter=1000, optimizer="adam",
-                 num_layers=2, num_units=32, activation="relu", seed=None,
-                 **kwargs):
+                 num_restarts=10, batch_size=64, num_steps_per_iter=1000,
+                 optimizer="adam", num_layers=2, num_units=32,
+                 activation="relu", seed=None, **kwargs):
 
         super(DRE, self).__init__(**kwargs)
 
@@ -90,16 +92,23 @@ class DRE(base_config_generator):
         self.config_arrs = []
         self.losses = []
 
+        self.num_restarts = num_restarts
+
         self.seed = seed
         self.random_state = np.random.RandomState(seed)
 
-    def get_config(self, budget):
+    @staticmethod
+    def make_minimizer(num_restarts, method="L-BFGS-B", max_iter=10000,
+                       tol=1e-8):
 
-        dataset_size = len(self.config_arrs)
+        @multi_start(num_restarts=num_restarts)
+        def multi_start_minimizer(fn, x0, bounds):
+            return minimize(fn, x0=x0, method=method, jac=True, bounds=bounds,
+                            tol=tol, options=dict(maxiter=max_iter))
 
-        if dataset_size < self.num_random_init:
-            # TODO: how to seed this source of randomness?
-            return (self.config_space.sample_configuration().get_dictionary(), {})
+        return multi_start_minimizer
+
+    def make_minimizee(self):
 
         @numpy_io()
         @value_and_gradient
@@ -108,19 +117,55 @@ class DRE(base_config_generator):
 
             return - self.model(x)
 
-        config_init = self.config_space.sample_configuration()
-        config_init_arr = config_init.get_array()
+        return func
 
+    def get_config(self, budget):
+
+        dataset_size = len(self.config_arrs)
+
+        config_random = self.config_space.sample_configuration()
+        config_random_dict = config_random.get_dictionary()
+
+        if dataset_size < self.num_random_init:
+            self.logger.debug(f"Completed {dataset_size}/{self.num_random_init}"
+                              " initial runs. Returning random candidate...")
+            return (config_random_dict, {})
+
+        minimize = self.make_minimizer(num_restarts=self.num_restarts)
+        func = self.make_minimizee()
         bounds = self.config_space.get_bounds()
 
-        opt_res = minimize(func, x0=config_init_arr, jac=True, bounds=bounds,
-                           method="L-BFGS-B", tol=1e-8)
-        config_opt_arr = opt_res.x
+        self.logger.debug("Beginning multi-start maximization with "
+                          f"{self.num_restarts} starts...")
+
+        results = minimize(func, bounds, random_state=self.random_state)
+        for i, res in enumerate(results):
+            self.logger.debug(f"[Maximum {i+1:02d}/{self.num_restarts:02d}: "
+                              f"{-res.fun:.3f}] success: {res.success}, "
+                              f"iterations: {res.nit:02d}, status: {res.status}"
+                              f" ({res.message.decode('utf-8')})")
+
+        results_success = list(filter(lambda res: res.success, results))
+        self.logger.debug("Finished multi-start maximization: "
+                          f"{len(results_success):02d}/{self.num_restarts:02d}"
+                          " starts were successful")
+
+        if not results_success:
+            self.logger.warn(f"Optimization failed in all {self.num_restarts} "
+                             "starts! Returning random candidate...")
+            return (config_random_dict, {})
+
+        res = min(results_success, key=lambda res: res.fun)
+        self.logger.info(f"[Glob. maximum] x={res.x}")
+        self.logger.info(f"[Glob. maximum] logit={-res.fun:.3f}, "
+                         f"prob={tf.sigmoid(-res.fun):.3f}, "
+                         f"rel. ratio={tf.sigmoid(-res.fun)/self.gamma:.3f}")
+
+        config_opt_arr = res.x
         config_opt = DenseConfiguration.from_array(self.config_space,
                                                    array_dense=config_opt_arr)
         config_opt_dict = config_opt.get_dictionary()
 
-        print(opt_res)
         return (config_opt_dict, {})
 
     def new_result(self, job, update_model=True):

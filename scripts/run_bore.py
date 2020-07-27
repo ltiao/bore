@@ -1,6 +1,6 @@
 import sys
 import click
-# import json
+import logging
 
 # import numpy as np
 # import pandas as pd
@@ -12,6 +12,8 @@ from pathlib import Path
 from bore.engine import BORE
 from bore.benchmarks import HartmannWorker
 from bore.utils import dataframe_from_result
+
+logging.basicConfig(level=logging.DEBUG)
 
 OUTPUT_DIR = "results/"
 
@@ -27,13 +29,14 @@ def main(name, output_dir):
     output_path.mkdir(parents=True, exist_ok=True)
 
     # TODO: Make these command-line arguments
-    num_runs = 20
-    num_iterations = 200
+    num_runs = 1
+    num_iterations = 20
 
     gamma = 0.15
     num_random_init = 10
+    num_restarts = 5
     batch_size = 64
-    num_steps_per_iter = 50
+    num_steps_per_iter = 200
     optimizer = "adam"
     num_layers = 2
     num_units = 32
@@ -65,11 +68,13 @@ def main(name, output_dir):
                   max_budget=max_budget,
                   gamma=gamma,
                   num_random_init=num_random_init,
+                  num_restarts=num_restarts,
                   batch_size=batch_size,
                   num_steps_per_iter=num_steps_per_iter,
                   optimizer=optimizer,
                   num_layers=num_layers,
                   num_units=num_units,
+                  seed=run_id,
                   activation=activation,
                   nameserver=ns_host,
                   nameserver_port=ns_port,

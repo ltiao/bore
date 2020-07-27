@@ -5,11 +5,29 @@ from scipy.optimize import Bounds
 from sklearn.utils import check_random_state
 
 
-def multi_start(num_restarts, unique=True):
+def deduplicate(results, atol=1e-6):
+
+    results_unique = []
+    for res in results:
+        # - There are more efficient data structures for this, such as a
+        #   KD-Tree or Locality Sensitive Hashing (LSH), but these are
+        #   premature optimizations at this time
+        if any(np.allclose(res_prev.x, res.x, atol=atol)
+               for res_prev in results_unique):
+            results_unique.append(res)
+
+    return results_unique
+
+
+def multi_start(num_restarts):
 
     def decorator(minimizer_fn):
 
         def new_minimizer(fn, bounds, random_state=None):
+            # We deliberately don't use args/kwargs here which would increase
+            # flexibility but also complexity. The aim here to to expose a
+            # simplied interface so users can't accidently pass conflicting
+            # arguments, e.g. `x0` which is the whole point of this decorator.
 
             # TODO(LT): Allow alternative arbitary generator function callbacks
             # to support e.g. Gaussian sampling, low-discrepancy sequences, etc
@@ -31,16 +49,6 @@ def multi_start(num_restarts, unique=True):
             results = []
             for x_init in x_inits:
                 res = minimizer_fn(fn, x0=x_init, bounds=bounds)
-                # TODO(LT): is this a little overbearing? The caller can easily
-                #   deal with duplicates themselves.
-                #   - Further, there are more efficient data structures for
-                #     this, such as a KD-Tree or Locality Sensitive Hashing
-                #     (LSH), but these are premature optimizations at this time
-                #   - Should support other options for `atol`.
-                if unique and any(np.allclose(res_prev.x, res.x, atol=1e-6)
-                                  for res_prev in results):
-                    continue
-
                 results.append(res)
 
             # TODO(LT): support reduction function callback? e.g. argmin which
@@ -54,7 +62,7 @@ def multi_start(num_restarts, unique=True):
     return decorator
 
 
-@multi_start(num_restarts=10, unique=True)
+@multi_start(num_restarts=10)
 def multi_start_lbfgs_minimizer(fn, x0, bounds):
     """
     Wrapper around SciPy L-BFGS-B minimizer with a simplified interface and
