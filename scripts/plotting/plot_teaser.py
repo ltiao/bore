@@ -84,6 +84,12 @@ def mixture(p, q, pi=0.):
     return pi*p + (1 - pi)*q
 
 
+def relative(ratio_inverse, gamma):
+
+    denom = gamma + (1-gamma) * ratio_inverse
+    return 1/denom
+
+
 @click.command()
 @click.argument("name")
 @click.option('--width', '-w', type=float, default=WIDTH)
@@ -284,7 +290,7 @@ def main(name, width, aspect, extension, output_dir):
             alpha=0.4, label=fr"$g(x)$ -- bw {kde_greater.bw:.2f}")
     ax.plot(gamma, kde_lesser.evaluate(gamma) / kde_greater.evaluate(gamma),
             label=r'$\ell(x) / g(x)$')
-    ax.plot(gamma, kde_lesser.evaluate(gamma) / mixture(kde_lesser.evaluate(gamma), kde_greater.evaluate(gamma), pi=PI),
+    ax.plot(gamma, relative(kde_greater.evaluate(gamma) / kde_lesser.evaluate(gamma), PI),
             label=r'$r_{\gamma}(x)$')
 
     sns.rugplot(gamma_samples_lesser, c='tab:blue', ax=ax)

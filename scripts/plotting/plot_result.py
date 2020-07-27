@@ -31,6 +31,8 @@ OUTPUT_DIR = "figures/"
 
 @click.command()
 @click.argument("name")
+@click.argument("input_dir", default="results",
+                type=click.Path(file_okay=False, dir_okay=True))
 @click.option('--context', default="paper")
 @click.option('--style', default="ticks")
 @click.option('--palette', default="muted")
@@ -40,7 +42,7 @@ OUTPUT_DIR = "figures/"
 @click.option("--output-dir", default=OUTPUT_DIR,
               type=click.Path(file_okay=False, dir_okay=True),
               help="Output directory.")
-def main(name, context, style, palette, width, aspect, extension,
+def main(name, input_dir, context, style, palette, width, aspect, extension,
          output_dir):
 
     figsize = size(width, aspect)
@@ -53,22 +55,23 @@ def main(name, context, style, palette, width, aspect, extension,
     }
     sns.set(context=context, style=style, palette=palette, font="serif", rc=rc)
 
+    input_path = Path(input_dir)
     output_path = Path(output_dir).joinpath(name)
     output_path.mkdir(parents=True, exist_ok=True)
 
     num_runs = 20
     error_min = -3.32237
     optimizers = ["random", "tpe", "gamma15"]
-    base_dir = Path("results")
 
     frames = []
     for optimizer in optimizers:
 
-        frame = load_runs(base_dir.joinpath(optimizer),
+        frame = load_runs(input_path.joinpath(optimizer),
                           runs=num_runs, error_min=error_min)
         frames.append(frame.assign(optimizer=optimizer))
 
     data = pd.concat(frames, axis="index", ignore_index=True, sort=True)
+    data.replace({"optimizer": {"random": "Random Search", "tpe": "TPE", "gamma15": "BORE"}}, inplace=True)
     data.rename(lambda s: s.replace('_', ' '), axis="columns", inplace=True)
 
     fig, ax = plt.subplots()

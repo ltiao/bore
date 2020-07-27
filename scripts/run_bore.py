@@ -58,7 +58,7 @@ def main(name, output_dir):
             w.run(background=True)
             workers.append(w)
 
-        rs = BORE(configspace=HartmannWorker.get_configspace(),
+        rs = BORE(config_space=HartmannWorker.get_config_space(),
                   run_id=run_id,
                   eta=eta,
                   min_budget=min_budget,

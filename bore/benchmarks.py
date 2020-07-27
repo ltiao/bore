@@ -30,7 +30,7 @@ class HartmannWorker(Worker):
         return dict(loss=y, info=None)
 
     @staticmethod
-    def get_configspace():
+    def get_config_space():
         cs = ConfigSpace.ConfigurationSpace()
         for i in range(dims):
             cs.add_hyperparameter(ConfigSpace.UniformFloatHyperparameter(
