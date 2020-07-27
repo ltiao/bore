@@ -61,7 +61,7 @@ def main(name, input_dir, context, style, palette, width, aspect, extension,
 
     num_runs = 20
     error_min = -3.32237
-    optimizers = ["random", "tpe", "gamma15"]
+    optimizers = ["random", "tpe", "borabora"]
 
     frames = []
     for optimizer in optimizers:
@@ -71,21 +71,22 @@ def main(name, input_dir, context, style, palette, width, aspect, extension,
         frames.append(frame.assign(optimizer=optimizer))
 
     data = pd.concat(frames, axis="index", ignore_index=True, sort=True)
-    data.replace({"optimizer": {"random": "Random Search", "tpe": "TPE", "gamma15": "BORE"}}, inplace=True)
+    data.replace({"optimizer": {"random": "Random Search", "tpe": "TPE", "borabora": "BORE"}}, inplace=True)
     data.rename(lambda s: s.replace('_', ' '), axis="columns", inplace=True)
 
     fig, ax = plt.subplots()
     sns.despine(fig=fig, ax=ax, top=True)
 
-    sns.lineplot(x="task", y="regret best", hue="optimizer",
-                 ci="sd", data=data, ax=ax)
+    sns.lineplot(x="task", y="regret best", hue="optimizer", style="optimizer",
+                 # ci="sd",
+                 data=data, ax=ax)
 
     ax.set_xlabel("iteration")
     ax.set_ylabel("incumbent regret")
 
     ax.set_xscale("log")
     ax.set_yscale("log")
-    ax.set_ylim(1e-1, -error_min)
+    ax.set_ylim(5e-2, -error_min)
 
     for ext in extension:
         fig.savefig(output_path.joinpath(f"regret_vs_iterations_{context}_{suffix}.{ext}"),

@@ -206,8 +206,10 @@ class DRE(base_config_generator):
                                                      self.batch_size)))
         num_epochs = self.num_steps_per_iter // steps_per_epoch
 
-        print(f"Training model with {dataset_size} datapoints for "
-              f"{num_epochs} epochs!")
-        print(X, y)
+        self.logger.debug(f"Training model with {dataset_size} datapoints for "
+                          f"{num_epochs} epochs!")
+        self.logger.debug(X)
+        self.logger.debug(y)
+
         self.model.fit(X, z, epochs=num_epochs, batch_size=self.batch_size,
                        verbose=False)

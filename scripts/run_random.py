@@ -29,9 +29,9 @@ def main(name, output_dir):
 
     # TODO: Make these command-line arguments
     num_runs = 20
-    num_iterations = 200
-    eta = 3
+    num_iterations = 500
 
+    eta = 3
     min_budget = 100
     max_budget = 100
 
@@ -50,7 +50,7 @@ def main(name, output_dir):
             w.run(background=True)
             workers.append(w)
 
-        rs = RandomSearch(configspace=HartmannWorker.get_configspace(),
+        rs = RandomSearch(configspace=HartmannWorker.get_config_space(),
                           run_id=run_id,
                           eta=eta,
                           min_budget=min_budget,

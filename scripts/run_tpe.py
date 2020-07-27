@@ -29,7 +29,7 @@ def main(name, output_dir):
 
     # TODO: Make these command-line arguments
     num_runs = 20
-    num_iterations = 200
+    num_iterations = 500
 
     min_points_in_model = 10
     top_n_percent = 15
@@ -57,7 +57,7 @@ def main(name, output_dir):
             w.run(background=True)
             workers.append(w)
 
-        rs = BOHB(configspace=HartmannWorker.get_configspace(),
+        rs = BOHB(configspace=HartmannWorker.get_config_space(),
                   run_id=run_id,
                   eta=eta,
                   min_budget=min_budget,

@@ -29,14 +29,14 @@ def main(name, output_dir):
     output_path.mkdir(parents=True, exist_ok=True)
 
     # TODO: Make these command-line arguments
-    num_runs = 1
-    num_iterations = 20
+    num_runs = 20
+    num_iterations = 500
 
     gamma = 0.15
     num_random_init = 10
-    num_restarts = 5
+    num_restarts = 3
     batch_size = 64
-    num_steps_per_iter = 200
+    num_steps_per_iter = 100
     optimizer = "adam"
     num_layers = 2
     num_units = 32
