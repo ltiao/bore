@@ -13,7 +13,7 @@ from bore.engine import BORE
 from bore.benchmarks import HartmannWorker
 from bore.utils import dataframe_from_result
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 OUTPUT_DIR = "results/"
 

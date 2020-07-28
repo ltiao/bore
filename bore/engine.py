@@ -212,4 +212,5 @@ class DRE(base_config_generator):
         self.logger.debug(y)
 
         self.model.fit(X, z, epochs=num_epochs, batch_size=self.batch_size,
-                       verbose=False)
+                       verbose=True)  # TODO(LT): Make this an argument
+        # TODO(LT): Report loss and accuracy at log level INFO
