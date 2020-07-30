@@ -20,19 +20,20 @@ from hpbandster.core.base_config_generator import base_config_generator
 class BORE(HyperBand):
 
     def __init__(self, config_space, eta=3, min_budget=0.01, max_budget=1,
-                 gamma=None, num_random_init=10, num_restarts=10, batch_size=64,
-                 num_steps_per_iter=1000, optimizer="adam",
-                 num_layers=2, num_units=32, activation="relu", seed=None,
-                 **kwargs):
+                 gamma=None, num_random_init=10, random_rate=0.25,
+                 num_restarts=10, batch_size=64, num_steps_per_iter=1000,
+                 optimizer="adam", num_layers=2, num_units=32,
+                 activation="relu", seed=None, **kwargs):
 
         if gamma is None:
             gamma = 1/eta
 
         cg = DRE(config_space=config_space,
-                 gamma=gamma, num_random_init=num_random_init, num_restarts=num_restarts,
+                 gamma=gamma, num_random_init=num_random_init,
+                 random_rate=random_rate, num_restarts=num_restarts,
                  batch_size=batch_size, num_steps_per_iter=num_steps_per_iter,
-                 optimizer=optimizer, num_layers=num_layers, num_units=num_units,
-                 activation=activation, seed=seed)
+                 optimizer=optimizer, num_layers=num_layers,
+                 num_units=num_units, activation=activation, seed=seed)
         # (LT): Note this is using the *grandparent* class initializer to
         # replace the config_generator!
         super(HyperBand, self).__init__(config_generator=cg, **kwargs)
@@ -67,9 +68,9 @@ class DRE(base_config_generator):
     class to implement random sampling from a ConfigSpace
     """
     def __init__(self, config_space, gamma=1/3, num_random_init=10,
-                 num_restarts=10, batch_size=64, num_steps_per_iter=1000,
-                 optimizer="adam", num_layers=2, num_units=32,
-                 activation="relu", seed=None, **kwargs):
+                 random_rate=0.25, num_restarts=10, batch_size=64,
+                 num_steps_per_iter=1000, optimizer="adam", num_layers=2,
+                 num_units=32, activation="relu", seed=None, **kwargs):
 
         super(DRE, self).__init__(**kwargs)
 
@@ -78,6 +79,11 @@ class DRE(base_config_generator):
         self.gamma = gamma
         self.num_random_init = num_random_init
 
+        assert 0. <= random_rate <= 1., "random rate must be in [0, 1]"
+        self.random_rate = random_rate
+
+        self.num_restarts = num_restarts
+
         self.batch_size = batch_size
         self.num_steps_per_iter = num_steps_per_iter
 
@@ -85,14 +91,12 @@ class DRE(base_config_generator):
                                      num_layers=num_layers,
                                      num_units=num_units,
                                      layer_kws=dict(activation=activation,
-                                                    kernel_regularizer=l2(1e-4))) # TODO(LT): make this an argument
+                                                    kernel_regularizer=l2(1e-3))) # TODO(LT): make this an argument
         self.model.compile(optimizer=optimizer, metrics=["accuracy"],
                            loss=binary_crossentropy_from_logits)
 
         self.config_arrs = []
         self.losses = []
-
-        self.num_restarts = num_restarts
 
         self.seed = seed
         self.random_state = np.random.RandomState(seed)
@@ -136,6 +140,11 @@ class DRE(base_config_generator):
                               " initial runs. Returning random candidate...")
             return (config_random_dict, {})
 
+        if self.random_state.binomial(p=self.random_rate, n=1):
+            self.logger.info("Returning random candidate "
+                             f"(prob={self.random_rate:.2f})...")
+            return (config_random_dict, {})
+
         # TODO(LT): The following three assignments can all be done at
         #   initialization time
         minimize = self.make_minimizer(num_restarts=self.num_restarts)
@@ -148,7 +157,7 @@ class DRE(base_config_generator):
         results = minimize(func, bounds, random_state=self.random_state)
         for i, res in enumerate(results):
             self.logger.debug(f"[Maximum {i+1:02d}/{self.num_restarts:02d}: "
-                              f"{-res.fun:.3f}] success: {res.success}, "
+                              f"logit={-res.fun:.3f}] success: {res.success}, "
                               f"iterations: {res.nit:02d}, status: {res.status}"
                               f" ({res.message.decode('utf-8')})")
 
@@ -163,10 +172,10 @@ class DRE(base_config_generator):
             return (config_random_dict, {})
 
         res = min(results_success, key=lambda res: res.fun)
-        self.logger.info(f"[Glob. maximum] x={res.x}")
-        self.logger.info(f"[Glob. maximum] logit={-res.fun:.3f}, "
+        self.logger.info(f"[Glob. maximum: logit={-res.fun:.3f}, "
                          f"prob={tf.sigmoid(-res.fun):.3f}, "
-                         f"rel. ratio={tf.sigmoid(-res.fun)/self.gamma:.3f}")
+                         f"rel. ratio={tf.sigmoid(-res.fun)/self.gamma:.3f}] "
+                         f"x={res.x}")
 
         config_opt_arr = res.x
         config_opt = DenseConfiguration.from_array(self.config_space,
@@ -206,11 +215,16 @@ class DRE(base_config_generator):
                                                      self.batch_size)))
         num_epochs = self.num_steps_per_iter // steps_per_epoch
 
-        self.logger.debug(f"Training model with {dataset_size} datapoints for "
-                          f"{num_epochs} epochs!")
+        self.logger.info(f"[Model fit] dataset size: {dataset_size}, "
+                         f"batch size: {self.batch_size}, "
+                         f"steps per epoch: {steps_per_epoch}, "
+                         f"num epochs: {num_epochs}")
         self.logger.debug(X)
         self.logger.debug(y)
 
         self.model.fit(X, z, epochs=num_epochs, batch_size=self.batch_size,
-                       verbose=True)  # TODO(LT): Make this an argument
-        # TODO(LT): Report loss and accuracy at log level INFO
+                       verbose=False)  # TODO(LT): Make this an argument
+
+        loss, accuracy = self.model.evaluate(X, z, verbose=False)
+        self.logger.info(f"[Model fit] loss={loss:.3f}, "
+                         f"accuracy={accuracy:.3f}")

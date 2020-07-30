@@ -11,7 +11,7 @@ from hpbandster.optimizers import RandomSearch
 
 from pathlib import Path
 
-from bore.benchmarks import HartmannWorker
+from bore.benchmarks import Hartmann3DWorker, Hartmann6DWorker, FCNetWorker
 from bore.utils import dataframe_from_result
 
 OUTPUT_DIR = "results/"
@@ -19,10 +19,11 @@ OUTPUT_DIR = "results/"
 
 @click.command()
 @click.argument("name")
+@click.option("--dataset-name")
 @click.option("--output-dir", default=OUTPUT_DIR,
               type=click.Path(file_okay=False, dir_okay=True),
               help="Output directory.")
-def main(name, output_dir):
+def main(name, dataset_name, output_dir):
 
     output_path = Path(output_dir).joinpath(name)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -35,6 +36,8 @@ def main(name, output_dir):
     min_budget = 100
     max_budget = 100
 
+    # FCNetWorker = make_fcnet_worker(dataset_name, data_dir="datasets/fcnet_tabular_benchmarks")
+
     for run_id in range(num_runs):
 
         NS = hpns.NameServer(run_id=run_id, host='localhost', port=0)
@@ -43,14 +46,13 @@ def main(name, output_dir):
         num_workers = 1
 
         workers = []
-        for i in range(num_workers):
-            w = HartmannWorker(nameserver=ns_host, nameserver_port=ns_port,
-                               run_id=run_id,
-                               id=i)
+        for worker_id in range(num_workers):
+            w = Hartmann3DWorker(nameserver=ns_host, nameserver_port=ns_port,
+                                 run_id=run_id, id=worker_id)
             w.run(background=True)
             workers.append(w)
 
-        rs = RandomSearch(configspace=HartmannWorker.get_config_space(),
+        rs = RandomSearch(configspace=Hartmann3DWorker.get_config_space(),
                           run_id=run_id,
                           eta=eta,
                           min_budget=min_budget,

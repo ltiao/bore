@@ -59,10 +59,15 @@ def main(name, input_dir, context, style, palette, width, aspect, extension,
     output_path = Path(output_dir).joinpath(name)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    num_runs = 20
-    error_min = -3.32237
-    optimizers = ["random", "tpe", "borabora"]
+    num_runs = 5
+    # runs = list(range(20))
+    # runs.pop(8)
+    # runs.pop(13-1)
 
+    # error_min = -3.32237
+    error_min = -3.86278
+    optimizers = ["random_hartmann3d", "tpe_hartmann3d", "test"]
+    # optimizers = ["random", "tpe", "bore"]
     frames = []
     for optimizer in optimizers:
 
@@ -71,14 +76,18 @@ def main(name, input_dir, context, style, palette, width, aspect, extension,
         frames.append(frame.assign(optimizer=optimizer))
 
     data = pd.concat(frames, axis="index", ignore_index=True, sort=True)
-    data.replace({"optimizer": {"random": "Random Search", "tpe": "TPE", "borabora": "BORE"}}, inplace=True)
+    data.replace({"optimizer": {"random_hartmann3d": "Random Search",
+                                "tpe_hartmann3d": "TPE",
+                                "test": "BORE"}}, inplace=True)
+    # data.replace({"optimizer": {"protein_structure": "Protein Structure"}}, inplace=True)
     data.rename(lambda s: s.replace('_', ' '), axis="columns", inplace=True)
 
     fig, ax = plt.subplots()
     sns.despine(fig=fig, ax=ax, top=True)
 
     sns.lineplot(x="task", y="regret best", hue="optimizer", style="optimizer",
-                 # ci="sd",
+                 # units="run", estimator=None,
+                 ci="sd", err_kws=dict(edgecolor='none'),
                  data=data, ax=ax)
 
     ax.set_xlabel("iteration")
@@ -86,13 +95,22 @@ def main(name, input_dir, context, style, palette, width, aspect, extension,
 
     ax.set_xscale("log")
     ax.set_yscale("log")
-    ax.set_ylim(5e-2, -error_min)
+    # ax.set_ylim(5e-2, -error_min)
 
     for ext in extension:
         fig.savefig(output_path.joinpath(f"regret_vs_iterations_{context}_{suffix}.{ext}"),
                     bbox_inches="tight")
 
     plt.show()
+
+    g = sns.relplot(x="task", y="error", hue="epoch",
+                    col="run", col_wrap=4, palette="Dark2",
+                    alpha=0.6, kind="scatter", data=data.query("optimizer == 'BORE'"))
+    g.map(plt.plot, "task", "best", color="k", linewidth=2.0, alpha=0.8)
+    g.set_axis_labels("iteration", "regret")
+
+    for ext in extension:
+        g.savefig(output_path.joinpath(f"error_vs_iterations_{context}_{suffix}.{ext}"))
 
     return 0
 

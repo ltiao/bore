@@ -197,6 +197,7 @@ def reset_mpl(gallery_conf, fname):
         "figure.figsize": golden_size(width),
         "font.serif": ['Times New Roman'],
         "text.usetex": True,
+        "animation.html": "jshtml"
     }
 
     sns.set(context="notebook",
@@ -207,6 +208,7 @@ def reset_mpl(gallery_conf, fname):
 
 
 sphinx_gallery_conf = {
+    "matplotlib_animations": True,
     "remove_config_comments": True,
     "reset_modules": (reset_mpl, "seaborn"),
     "reference_url": {
