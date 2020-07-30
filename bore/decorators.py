@@ -27,6 +27,7 @@ def unbatch(fn):
 def value_and_gradient(value_fn):
 
     @wraps(value_fn)
+    @tf.function
     def value_and_gradient_fn(x):
 
         # Equivalent to `tfp.math.value_and_gradient(value_fn, x)`, with the
@@ -43,20 +44,15 @@ def value_and_gradient(value_fn):
     return value_and_gradient_fn
 
 
-def numpy_io(dtype=None, dtype_hint=None, name=None):
+def numpy_io(fn):
 
-    def decorator(fn):
+    @wraps(fn)
+    def new_fn(*args):
 
-        @wraps(fn)
-        def new_fn(input):
+        new_args = map(tf.convert_to_tensor, args)
+        outputs = fn(*new_args)
+        new_outputs = [output.numpy() for output in outputs]
 
-            input_tensor = tf.convert_to_tensor(input, dtype=dtype,
-                                                dtype_hint=dtype_hint,
-                                                name=name)
-            output_tensor = fn(input_tensor)
+        return new_outputs
 
-            return [output.numpy() for output in output_tensor]
-
-        return new_fn
-
-    return decorator
+    return new_fn

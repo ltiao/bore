@@ -91,7 +91,7 @@ class DRE(base_config_generator):
                                      num_layers=num_layers,
                                      num_units=num_units,
                                      layer_kws=dict(activation=activation,
-                                                    kernel_regularizer=l2(1e-3))) # TODO(LT): make this an argument
+                                                    kernel_regularizer=l2(1e-4))) # TODO(LT): make this an argument
         self.model.compile(optimizer=optimizer, metrics=["accuracy"],
                            loss=binary_crossentropy_from_logits)
 
@@ -114,7 +114,7 @@ class DRE(base_config_generator):
 
     def make_minimizee(self):
 
-        @numpy_io()
+        @numpy_io
         @value_and_gradient
         @unbatch
         def func(x):
@@ -211,20 +211,22 @@ class DRE(base_config_generator):
         y_threshold = np.quantile(y, q=self.gamma)
         z = np.less_equal(y, y_threshold)
 
+        self.logger.warn(f"FFFFFFFFFFFFF {np.sum(z)/dataset_size}")
+
         steps_per_epoch = int(np.ceil(np.true_divide(dataset_size,
                                                      self.batch_size)))
         num_epochs = self.num_steps_per_iter // steps_per_epoch
 
-        self.logger.info(f"[Model fit] dataset size: {dataset_size}, "
+        self.model.fit(X, z, epochs=num_epochs, batch_size=self.batch_size,
+                       verbose=False)  # TODO(LT): Make this an argument
+        loss, accuracy = self.model.evaluate(X, z, verbose=False)
+
+        self.logger.info(f"[Model fit: loss={loss:.3f}, "
+                         f"accuracy={accuracy:.3f}] "
+                         f"dataset size: {dataset_size}, "
                          f"batch size: {self.batch_size}, "
                          f"steps per epoch: {steps_per_epoch}, "
+                         f"num steps per iter: {self.num_steps_per_iter}, "
                          f"num epochs: {num_epochs}")
         self.logger.debug(X)
         self.logger.debug(y)
-
-        self.model.fit(X, z, epochs=num_epochs, batch_size=self.batch_size,
-                       verbose=False)  # TODO(LT): Make this an argument
-
-        loss, accuracy = self.model.evaluate(X, z, verbose=False)
-        self.logger.info(f"[Model fit] loss={loss:.3f}, "
-                         f"accuracy={accuracy:.3f}")

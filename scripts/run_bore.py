@@ -26,11 +26,11 @@ OUTPUT_DIR = "results/"
               help="Output directory.")
 def main(name, dataset_name, output_dir):
 
-    output_path = Path(output_dir).joinpath(name)
+    output_path = Path(output_dir).joinpath(name, "bore")
     output_path.mkdir(parents=True, exist_ok=True)
 
     # TODO: Make these command-line arguments
-    num_runs = 5
+    num_runs = 20
     num_iterations = 500
 
     gamma = 1/3
@@ -38,7 +38,7 @@ def main(name, dataset_name, output_dir):
     random_rate = 0.25
     num_restarts = 3
     batch_size = 64
-    num_steps_per_iter = 200
+    num_steps_per_iter = 20
 
     optimizer = "adam"
     num_layers = 2
@@ -60,12 +60,12 @@ def main(name, dataset_name, output_dir):
 
         workers = []
         for worker_id in range(num_workers):
-            w = Hartmann3DWorker(nameserver=ns_host, nameserver_port=ns_port,
+            w = Hartmann6DWorker(nameserver=ns_host, nameserver_port=ns_port,
                                  run_id=run_id, id=worker_id)
             w.run(background=True)
             workers.append(w)
 
-        rs = BORE(config_space=Hartmann3DWorker.get_config_space(),
+        rs = BORE(config_space=Hartmann6DWorker.get_config_space(),
                   run_id=run_id,
                   eta=eta,
                   min_budget=min_budget,

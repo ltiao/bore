@@ -64,21 +64,21 @@ def main(name, input_dir, context, style, palette, width, aspect, extension,
     # runs.pop(8)
     # runs.pop(13-1)
 
-    # error_min = -3.32237
-    error_min = -3.86278
-    optimizers = ["random_hartmann3d", "tpe_hartmann3d", "test"]
+    error_min = -3.32237
+    # error_min = -3.86278
+    optimizers = ["bore"]
     # optimizers = ["random", "tpe", "bore"]
     frames = []
     for optimizer in optimizers:
 
-        frame = load_runs(input_path.joinpath(optimizer),
+        frame = load_runs(input_path.joinpath(name, optimizer),
                           runs=num_runs, error_min=error_min)
         frames.append(frame.assign(optimizer=optimizer))
 
     data = pd.concat(frames, axis="index", ignore_index=True, sort=True)
     data.replace({"optimizer": {"random_hartmann3d": "Random Search",
                                 "tpe_hartmann3d": "TPE",
-                                "test": "BORE"}}, inplace=True)
+                                "bore": "BORE"}}, inplace=True)
     # data.replace({"optimizer": {"protein_structure": "Protein Structure"}}, inplace=True)
     data.rename(lambda s: s.replace('_', ' '), axis="columns", inplace=True)
 
