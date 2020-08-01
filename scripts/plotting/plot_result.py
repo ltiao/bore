@@ -7,7 +7,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from bore.utils import load_runs
+# from bore.utils import load_runs
 from pathlib import Path
 
 import ConfigSpace as CS
@@ -29,6 +29,73 @@ def size(width, aspect=GOLDEN_RATIO):
 
     width_in = pt_to_in(width)
     return (width_in, width_in / aspect)
+
+
+def extract_series(frame, index="elapsed", column="regret_best"):
+
+    frame_new = frame.set_index(index)
+    series = frame_new[column]
+
+    # (0) save last timestamp and value
+#     series_final = series.tail(n=1)
+
+    # (1) de-duplicate the values (significantly speed-up
+    # subsequent processing)
+    # (2) de-duplicate the indices (it is entirely possible
+    # for some epoch of two different tasks to complete
+    # at the *exact* same time; we take the one with the
+    # smaller value)
+    # (3) add back last timestamp and value which can get
+    # lost in step (1)
+    series_new = series.drop_duplicates(keep="first") \
+                       .groupby(level=index).min()
+#                        .append(series_final)
+    return series_new
+
+
+def load_runs(base_dir, runs=[], error_min=None):
+
+    base_path = Path(base_dir)
+
+    series = {}
+    for run in range(runs):
+
+        path = base_path.joinpath(f"{run:03d}.csv")
+        frame = pd.read_csv(path, index_col=0).assign(run=run)
+
+        best = frame.error.cummin()
+        elapsed = frame.cost.cumsum()
+        frame = frame.assign(best=best, elapsed=elapsed)
+
+        if error_min is not None:
+            regret = (error_min - frame.error).abs()
+            regret_best = regret.cummin()
+            frame = frame.assign(regret=regret, regret_best=regret_best)
+
+        series[run] = extract_series(frame, index="elapsed", column="regret_best")
+
+    return series  # pd.concat(frames, axis="index", ignore_index=True, sort=True)
+
+
+def merge_stack_runs(series_dict, run_key="run", y_key="regret_best"):
+
+    frame = pd.DataFrame(series_dict)
+
+    # fill missing values by propagating previous observation
+    frame.ffill(axis="index", inplace=True)
+
+    # NaNs can only remain if there are no previous observations
+    # i.e. these occur at the beginning rows.
+    # drop rows until all runs have recorded observations.
+    frame.dropna(how="any", axis="index", inplace=True)
+
+    frame.columns.name = run_key
+    stacked = frame.stack(level=run_key)
+
+    stacked.name = y_key
+    stacked_frame = stacked.reset_index()
+
+    return stacked_frame
 
 
 def get_error_mins(benchmark_name, data_dir=None, budget=100):
@@ -164,8 +231,9 @@ def main(benchmark_name, input_dir, methods, ci, context, style, palette,
     frames = []
     for method in methods:
 
-        frame = load_runs(input_path.joinpath(benchmark_name, method),
-                          runs=num_runs, error_min=error_min)
+        series = load_runs(input_path.joinpath(benchmark_name, method),
+                           runs=num_runs, error_min=error_min)
+        frame = merge_stack_runs(series)
         frames.append(frame.assign(method=method))
 
     data = pd.concat(frames, axis="index", ignore_index=True, sort=True)
@@ -178,7 +246,7 @@ def main(benchmark_name, input_dir, methods, ci, context, style, palette,
     fig, ax = plt.subplots()
     sns.despine(fig=fig, ax=ax, top=True)
 
-    sns.lineplot(x="task", y="regret best",
+    sns.lineplot(x="elapsed", y="regret best",
                  hue="method", hue_order=hue_order,
                  style="method", style_order=style_order,
                  # units="run", estimator=None,
@@ -186,7 +254,7 @@ def main(benchmark_name, input_dir, methods, ci, context, style, palette,
                  err_kws=dict(edgecolor='none'),
                  data=data, ax=ax)
 
-    ax.set_xlabel("iteration")
+    ax.set_xlabel("wall-clock time elapsed (s)")
     ax.set_ylabel("incumbent regret")
 
     ax.set_xscale("log")
@@ -194,12 +262,12 @@ def main(benchmark_name, input_dir, methods, ci, context, style, palette,
     # ax.set_ylim(1e-1, -error_min)
 
     for ext in extension:
-        fig.savefig(output_path.joinpath(f"regret_vs_iterations_{context}_{suffix}.{ext}"),
+        fig.savefig(output_path.joinpath(f"regret_vs_elapsed_{context}_{suffix}.{ext}"),
                     bbox_inches="tight")
 
     plt.show()
 
-    g = sns.relplot(x="task", y="regret", hue="run",
+    g = sns.relplot(x="elapsed", y="regret", hue="run",
                     col="method", palette="tab20",
                     alpha=0.6, kind="scatter", data=data)
     g.map(sns.lineplot, "task", "regret best", "run",
@@ -207,7 +275,7 @@ def main(benchmark_name, input_dir, methods, ci, context, style, palette,
     g.set_axis_labels("iteration", "regret")
 
     for ext in extension:
-        g.savefig(output_path.joinpath(f"regret_vs_iterations_all_{context}_{suffix}.{ext}"))
+        g.savefig(output_path.joinpath(f"regret_vs_elapsed_all_{context}_{suffix}.{ext}"))
 
     # g = sns.relplot(x="task", y="error", hue="epoch",
     #                 col="run", col_wrap=4, palette="Dark2",
