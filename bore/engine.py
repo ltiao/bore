@@ -17,6 +17,14 @@ from hpbandster.optimizers.hyperband import HyperBand
 from hpbandster.core.base_config_generator import base_config_generator
 
 
+def is_duplicate(x, xs, rtol=1e-5, atol=1e-8):
+    # Clever ways of doing this would involve data structs. like KD-trees
+    # or locality sensitive hashing (LSH), but these are premature
+    # optimizations at this point, especially since the `any` below does lazy
+    # evaluation, i.e. is early stopped as soon as anything returns `True`.
+    return any(np.allclose(x_prev, x, rtol=rtol, atol=atol) for x_prev in xs)
+
+
 class BORE(HyperBand):
 
     def __init__(self, config_space, eta=3, min_budget=0.01, max_budget=1,
@@ -87,19 +95,25 @@ class DRE(base_config_generator):
         self.batch_size = batch_size
         self.num_steps_per_iter = num_steps_per_iter
 
+        self.config_arrs = []
+        self.losses = []
+
+        l2_factor = 1e-4
+
+        self._init_model(num_layers, num_units, activation, optimizer, l2_factor)
+
+        self.seed = seed
+        self.random_state = np.random.RandomState(seed)
+
+    def _init_model(self, num_layers, num_units, activation, optimizer, l2_factor):
+
         self.model = DenseSequential(output_dim=1,
                                      num_layers=num_layers,
                                      num_units=num_units,
                                      layer_kws=dict(activation=activation,
-                                                    kernel_regularizer=l2(1e-4))) # TODO(LT): make this an argument
+                                                    kernel_regularizer=l2(l2_factor))) # TODO(LT): make this an argument
         self.model.compile(optimizer=optimizer, metrics=["accuracy"],
                            loss=binary_crossentropy_from_logits)
-
-        self.config_arrs = []
-        self.losses = []
-
-        self.seed = seed
-        self.random_state = np.random.RandomState(seed)
 
     @staticmethod
     def make_minimizer(num_restarts, method="L-BFGS-B", max_iter=10000,
@@ -125,11 +139,6 @@ class DRE(base_config_generator):
 
     def get_config(self, budget):
 
-        # TODO(LT): Add a check to make sure the maximum solution isn't within
-        #   inside the k-ball of any previously evaluated candidate.
-        #   Clever ways of doing this would involve data structs. like KD-trees
-        #   or locality sensitive hashing (LSH), but these are premature
-        #   optimizations at this point.
         dataset_size = len(self.config_arrs)
 
         config_random = self.config_space.sample_configuration()
@@ -141,9 +150,37 @@ class DRE(base_config_generator):
             return (config_random_dict, {})
 
         if self.random_state.binomial(p=self.random_rate, n=1):
-            self.logger.info("Returning random candidate "
-                             f"(prob={self.random_rate:.2f})...")
+            self.logger.info("[Glob. maximum: skipped "
+                             f"(prob={self.random_rate:.2f})] "
+                             "Returning random candidate ...")
             return (config_random_dict, {})
+
+        # Model fitting
+        X = np.vstack(self.config_arrs)
+        y = np.hstack(self.losses)
+
+        y_threshold = np.quantile(y, q=self.gamma)
+        z = np.less_equal(y, y_threshold)
+
+        steps_per_epoch = int(np.ceil(np.true_divide(dataset_size,
+                                                     self.batch_size)))
+        num_epochs = self.num_steps_per_iter // steps_per_epoch
+
+        self.model.fit(X, z, epochs=num_epochs, batch_size=self.batch_size,
+                       verbose=False)  # TODO(LT): Make this an argument
+        loss, accuracy = self.model.evaluate(X, z, verbose=False)
+
+        self.logger.info(f"[Model fit: loss={loss:.3f}, "
+                         f"accuracy={accuracy:.3f}] "
+                         f"dataset size: {dataset_size}, "
+                         f"batch size: {self.batch_size}, "
+                         f"steps per epoch: {steps_per_epoch}, "
+                         f"num steps per iter: {self.num_steps_per_iter}, "
+                         f"num epochs: {num_epochs}")
+        self.logger.debug(X)
+        self.logger.debug(y)
+
+        # Maximize acquisition function
 
         # TODO(LT): The following three assignments can all be done at
         #   initialization time
@@ -155,29 +192,33 @@ class DRE(base_config_generator):
                           f"{self.num_restarts} starts...")
 
         results = minimize(func, bounds, random_state=self.random_state)
+
+        res_best = None
         for i, res in enumerate(results):
             self.logger.debug(f"[Maximum {i+1:02d}/{self.num_restarts:02d}: "
                               f"logit={-res.fun:.3f}] success: {res.success}, "
                               f"iterations: {res.nit:02d}, status: {res.status}"
                               f" ({res.message.decode('utf-8')})")
 
-        results_success = list(filter(lambda res: res.success, results))
-        self.logger.debug("Finished multi-start maximization: "
-                          f"{len(results_success):02d}/{self.num_restarts:02d}"
-                          " starts were successful")
+            if res.success and not is_duplicate(res.x, self.config_arrs):
+                # if (res_best is not None) *implies* (res.fun < res_best.fun)
+                # (i.e. material implication) is logically equivalent to below
+                if res_best is None or res.fun < res_best.fun:
+                    res_best = res
 
-        if not results_success:
-            self.logger.warn(f"Optimization failed in all {self.num_restarts} "
-                             "starts! Returning random candidate...")
+        if res_best is None:
+            self.logger.warn("[Glob. maximum: not found!] Either optimization "
+                             f"failed in all {self.num_restarts} starts, or "
+                             "all maxima found have been evaluated previously!"
+                             " Returning random candidate...")
             return (config_random_dict, {})
 
-        res = min(results_success, key=lambda res: res.fun)
-        self.logger.info(f"[Glob. maximum: logit={-res.fun:.3f}, "
-                         f"prob={tf.sigmoid(-res.fun):.3f}, "
-                         f"rel. ratio={tf.sigmoid(-res.fun)/self.gamma:.3f}] "
-                         f"x={res.x}")
+        self.logger.info(f"[Glob. maximum: logit={-res_best.fun:.3f}, "
+                         f"prob={tf.sigmoid(-res_best.fun):.3f}, "
+                         f"rel. ratio={tf.sigmoid(-res_best.fun)/self.gamma:.3f}] "
+                         f"x={res_best.x}")
 
-        config_opt_arr = res.x
+        config_opt_arr = res_best.x
         config_opt = DenseConfiguration.from_array(self.config_space,
                                                    array_dense=config_opt_arr)
         config_opt_dict = config_opt.get_dictionary()
@@ -198,35 +239,3 @@ class DRE(base_config_generator):
 
         self.losses.append(loss)
         self.config_arrs.append(config_arr)
-        dataset_size = len(self.config_arrs)
-
-        if dataset_size < self.num_random_init:
-            self.logger.debug(f"Completed {dataset_size}/{self.num_random_init}"
-                              " initial runs. Skipping model fitting.")
-            return
-
-        X = np.vstack(self.config_arrs)
-        y = np.hstack(self.losses)
-
-        y_threshold = np.quantile(y, q=self.gamma)
-        z = np.less_equal(y, y_threshold)
-
-        self.logger.warn(f"FFFFFFFFFFFFF {np.sum(z)/dataset_size}")
-
-        steps_per_epoch = int(np.ceil(np.true_divide(dataset_size,
-                                                     self.batch_size)))
-        num_epochs = self.num_steps_per_iter // steps_per_epoch
-
-        self.model.fit(X, z, epochs=num_epochs, batch_size=self.batch_size,
-                       verbose=False)  # TODO(LT): Make this an argument
-        loss, accuracy = self.model.evaluate(X, z, verbose=False)
-
-        self.logger.info(f"[Model fit: loss={loss:.3f}, "
-                         f"accuracy={accuracy:.3f}] "
-                         f"dataset size: {dataset_size}, "
-                         f"batch size: {self.batch_size}, "
-                         f"steps per epoch: {steps_per_epoch}, "
-                         f"num steps per iter: {self.num_steps_per_iter}, "
-                         f"num epochs: {num_epochs}")
-        self.logger.debug(X)
-        self.logger.debug(y)

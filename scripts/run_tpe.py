@@ -11,25 +11,51 @@ from hpbandster.optimizers import BOHB
 
 from pathlib import Path
 
-from bore.benchmarks import Hartmann3DWorker, Hartmann6DWorker, FCNetWorker
+from bore.benchmarks import (Hartmann3DWorker, Hartmann6DWorker,
+                             BoreholeWorker, FCNetWorker, BraninWorker)
 from bore.utils import dataframe_from_result
 
-OUTPUT_DIR = "results/"
+
+workers = dict(
+    branin=BraninWorker,
+    hartmann3d=Hartmann3DWorker,
+    hartmann6d=Hartmann6DWorker,
+    borehole=BoreholeWorker,
+    fcnet=FCNetWorker
+)
+
+
+def get_worker(benchmark_name, dataset_name=None, input_dir=None):
+
+    Worker = workers.get(benchmark_name)
+    kws = {}
+
+    if benchmark_name == "fcnet":
+        assert dataset_name is not None, "must specify dataset name"
+        kws["dataset_name"] = dataset_name
+        kws["data_dir"] = input_dir
+
+    return Worker, kws
 
 
 @click.command()
-@click.argument("name")
+@click.argument("benchmark_name")
 @click.option("--dataset-name")
-@click.option("--output-dir", default=OUTPUT_DIR,
+@click.option("--method-name", default="tpe")
+@click.option("--num-runs", "-n", default=20)
+@click.option("--input-dir", default="datasets/fcnet_tabular_benchmarks",
+              type=click.Path(file_okay=False, dir_okay=True),
+              help="Input data directory.")
+@click.option("--output-dir", default="results/",
               type=click.Path(file_okay=False, dir_okay=True),
               help="Output directory.")
-def main(name, dataset_name, output_dir):
+def main(benchmark_name, dataset_name, method_name, num_runs, input_dir,
+         output_dir):
 
-    output_path = Path(output_dir).joinpath(name)
-    output_path.mkdir(parents=True, exist_ok=True)
+    Worker, worker_kws = get_worker(benchmark_name, dataset_name=dataset_name,
+                                    input_dir=input_dir)
 
     # TODO: Make these command-line arguments
-    num_runs = 20
     num_iterations = 500
 
     min_points_in_model = 10
@@ -43,7 +69,9 @@ def main(name, dataset_name, output_dir):
     min_budget = 100
     max_budget = 100
 
-    # FCNetWorker = make_fcnet_worker(dataset_name, data_dir="datasets/fcnet_tabular_benchmarks")
+    output_path = Path(output_dir).joinpath(f"{benchmark_name}_{dataset_name}",
+                                            method_name)
+    output_path.mkdir(parents=True, exist_ok=True)
 
     for run_id in range(num_runs):
 
@@ -54,12 +82,12 @@ def main(name, dataset_name, output_dir):
 
         workers = []
         for worker_id in range(num_workers):
-            w = Hartmann3DWorker(nameserver=ns_host, nameserver_port=ns_port,
-                                 run_id=run_id, id=worker_id)
+            w = Worker(nameserver=ns_host, nameserver_port=ns_port,
+                       run_id=run_id, id=worker_id, **worker_kws)
             w.run(background=True)
             workers.append(w)
 
-        rs = BOHB(configspace=Hartmann3DWorker.get_config_space(),
+        rs = BOHB(configspace=Worker.get_config_space(),
                   run_id=run_id,
                   eta=eta,
                   min_budget=min_budget,

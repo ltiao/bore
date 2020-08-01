@@ -8,9 +8,63 @@ from tabular_benchmarks import (FCNetProteinStructureBenchmark,
                                 FCNetParkinsonsTelemonitoringBenchmark)
 
 
+def branin(x, y, a=1.0, b=5.1/(4*np.pi**2), c=5.0/np.pi, r=6.0, s=10.0,
+           t=1.0/(8*np.pi)):
+    return a*(y - b * x**2 + c*x - r)**2 + s*(1 - t)*np.cos(x) + s
+
+
+def borehole(rw, r, Tu, Hu, Tl, Hl, L, Kw):
+
+    g = np.log(r) - np.log(rw)
+    h = 1.0 + 2.0 * L * Tu / (g * rw**2 * Kw) + Tu / Tl
+
+    ret = 2.0 * np.pi * Tu * (Hu - Hl)
+    ret /= g * h
+
+    return ret
+
+
 def hartmann(x, alpha, A, P):
     r = np.sum(A * np.square(x - P), axis=-1)
     return - np.dot(np.exp(-r), alpha)
+
+
+class BraninWorker(Worker):
+
+    def compute(self, config, budget, **kwargs):
+
+        y = branin(**config)
+
+        return dict(loss=y, info=None)
+
+    @staticmethod
+    def get_config_space():
+        cs = CS.ConfigurationSpace()
+        cs.add_hyperparameter(CS.UniformFloatHyperparameter("x", lower=-5, upper=10))
+        cs.add_hyperparameter(CS.UniformFloatHyperparameter("y", lower=0, upper=15))
+        return cs
+
+
+class BoreholeWorker(Worker):
+
+    def compute(self, config, budget, **kwargs):
+
+        y = - borehole(**config)
+
+        return dict(loss=y, info=None)
+
+    @staticmethod
+    def get_config_space():
+        cs = CS.ConfigurationSpace()
+        cs.add_hyperparameter(CS.UniformFloatHyperparameter("rw", lower=0.05, upper=0.15))
+        cs.add_hyperparameter(CS.UniformFloatHyperparameter("r", lower=100, upper=50000))
+        cs.add_hyperparameter(CS.UniformFloatHyperparameter("Tu", lower=63070, upper=115600))
+        cs.add_hyperparameter(CS.UniformFloatHyperparameter("Hu", lower=990, upper=1110))
+        cs.add_hyperparameter(CS.UniformFloatHyperparameter("Tl", lower=63.1, upper=116))
+        cs.add_hyperparameter(CS.UniformFloatHyperparameter("Hl", lower=700, upper=820))
+        cs.add_hyperparameter(CS.UniformFloatHyperparameter("L", lower=1120, upper=1680))
+        cs.add_hyperparameter(CS.UniformFloatHyperparameter("Kw", lower=9855, upper=12045))
+        return cs
 
 
 class HartmannWorker(Worker):
@@ -65,16 +119,16 @@ class FCNetWorker(Worker):
 
         super(FCNetWorker, self).__init__(*args, **kwargs)
 
-        if dataset_name == "protein_structure":
+        if dataset_name == "protein":
             benchmark = FCNetProteinStructureBenchmark(data_dir=data_dir)
-        elif dataset_name == "slice_localization":
+        elif dataset_name == "slice":
             benchmark = FCNetSliceLocalizationBenchmark(data_dir=data_dir)
-        elif dataset_name == "naval_propulsion":
+        elif dataset_name == "naval":
             benchmark = FCNetNavalPropulsionBenchmark(data_dir=data_dir)
-        elif dataset_name == "parkinsons_telemonitoring":
+        elif dataset_name == "parkinsons":
             benchmark = FCNetParkinsonsTelemonitoringBenchmark(data_dir=data_dir)
         else:
-            raise ValueError
+            raise ValueError("dataset name not recognized!")
 
         self.benchmark = benchmark
 

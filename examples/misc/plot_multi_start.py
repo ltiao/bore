@@ -17,7 +17,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from scipy.optimize import Bounds
 
 from bore.optimizers import multi_start_lbfgs_minimizer
-from bore.decorators import value_and_gradient, numpy_io
+from bore.decorators import value_and_gradient, numpy_io, unstack
 # %%
 
 # constants
@@ -32,16 +32,6 @@ dim = 2
 
 seed = 8888  # set random seed for reproducibility
 random_state = np.random.RandomState(seed)
-# %%
-
-
-def unpack(fn):
-
-    def new_fn(xs):
-
-        return fn(*xs)
-
-    return new_fn
 # %%
 
 
@@ -82,7 +72,7 @@ plt.show()
 
 @numpy_io
 @value_and_gradient
-@unpack
+@unstack
 def func(x1, x2):
 
     return branin(x1, x2)
@@ -111,5 +101,41 @@ ax.set_ylabel(r"$x_2$")
 plt.show()
 # %%
 
+res_best = min(filter(lambda res: res.success, results), key=lambda res: res.fun)
+res_best
+# %%
+# Borehole
+
+
+@numpy_io
+@value_and_gradient
+@unstack
+def borehole(rw, r, Tu, Hu, Tl, Hl, L, Kw):
+
+    g = tf.math.log(r) - tf.math.log(rw)
+    h = 1.0 + 2.0 * L * Tu / (g * rw**2 * Kw) + Tu / Tl
+
+    ret = 2.0 * np.pi * Tu * (Hu - Hl)
+    ret /= g * h
+
+    return - ret
+# %%
+
+
+low = [0.05, 100, 63070, 990, 63.1, 700, 1120, 9855]
+high = [0.15, 50000, 115600, 1110, 116, 820, 1680, 12045]
+# %%
+
+bounds = Bounds(lb=low, ub=high)
+results = multi_start_lbfgs_minimizer(borehole, bounds, random_state=random_state)
+results
+# %%
+U = np.vstack([res.x for res in results])
+v = np.hstack([res.fun for res in results])
+# %%
+U
+# %%
+v
+# %%
 res_best = min(filter(lambda res: res.success, results), key=lambda res: res.fun)
 res_best
