@@ -133,7 +133,7 @@ class DRE(base_config_generator):
         @unbatch
         def func(x):
 
-            return - self.model(x)
+            return - tf.sigmoid(self.model(x))
 
         return func
 

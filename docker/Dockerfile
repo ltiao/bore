@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # TODO: copy to temporary dir rather than unknown current dir
 COPY requirements*.txt ./
-RUN python -m pip install --no-cache-dir --upgrade pip==20.2 keyrings.alt==3.4.0 && \
+RUN python -m pip install --no-cache-dir --upgrade pip==20.2.2 keyrings.alt==3.4.0 && \
     python -m pip install --no-cache-dir -r requirements_dev.txt && \
 	python -m pip install --no-cache-dir -r requirements.txt
 

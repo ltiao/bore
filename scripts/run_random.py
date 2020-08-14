@@ -1,6 +1,6 @@
 import sys
 import click
-# import json
+import json
 
 # import numpy as np
 # import pandas as pd
@@ -43,28 +43,32 @@ def get_worker(benchmark_name, dataset_name=None, input_dir=None):
 @click.option("--dataset-name")
 @click.option("--method-name", default="random")
 @click.option("--num-runs", "-n", default=20)
+@click.option("--num-iterations", "-i", default=500)
+@click.option("--eta", default=3, help="Successive halving reduction factor.")
+@click.option("--min-budget", default=100)
+@click.option("--max-budget", default=100)
 @click.option("--input-dir", default="datasets/fcnet_tabular_benchmarks",
               type=click.Path(file_okay=False, dir_okay=True),
               help="Input data directory.")
 @click.option("--output-dir", default="results/",
               type=click.Path(file_okay=False, dir_okay=True),
               help="Output directory.")
-def main(benchmark_name, dataset_name, method_name, num_runs, input_dir,
-         output_dir):
+def main(benchmark_name, dataset_name, method_name, num_runs,
+         num_iterations, eta, min_budget, max_budget, input_dir, output_dir):
 
     Worker, worker_kws = get_worker(benchmark_name, dataset_name=dataset_name,
                                     input_dir=input_dir)
 
-    # TODO: Make these command-line arguments
-    num_iterations = 500
+    name = benchmark_name if dataset_name is None else \
+        f"{benchmark_name}_{dataset_name}"
 
-    eta = 3
-    min_budget = 100
-    max_budget = 100
-
-    output_path = Path(output_dir).joinpath(f"{benchmark_name}_{dataset_name}",
-                                            method_name)
+    output_path = Path(output_dir).joinpath(name, method_name)
     output_path.mkdir(parents=True, exist_ok=True)
+
+    options = dict(num_iterations=num_iterations,
+                   eta=eta, min_budget=min_budget, max_budget=max_budget)
+    with open(output_path.joinpath("options.json"), 'w') as f:
+        json.dump(options, f, sort_keys=True, indent=2)
 
     for run_id in range(num_runs):
 

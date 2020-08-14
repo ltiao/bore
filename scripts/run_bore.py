@@ -1,5 +1,6 @@
 import sys
 import click
+import json
 import logging
 
 # import numpy as np
@@ -45,40 +46,49 @@ def get_worker(benchmark_name, dataset_name=None, input_dir=None):
 @click.option("--dataset-name")
 @click.option("--method-name", default="bore")
 @click.option("--num-runs", "-n", default=20)
+@click.option("--num-iterations", "-i", default=500)
+@click.option("--eta", default=3, help="Successive halving reduction factor.")
+@click.option("--min-budget", default=100)
+@click.option("--max-budget", default=100)
+@click.option("--gamma", default=0.15, help="Quantile, or mixing proportion.")
+@click.option("--num-random-init", default=10)
+@click.option("--random-rate", default=1/3, type=click.FloatRange(0., 1.))
+@click.option("--num-restarts", default=3)
+@click.option("--batch-size", default=64)
+@click.option("--num-steps-per-iter", default=100)
+@click.option("--optimizer", default="adam")
+@click.option("--num-layers", default=2)
+@click.option("--num-units", default=32)
+@click.option("--activation", default="relu")
 @click.option("--input-dir", default="datasets/fcnet_tabular_benchmarks",
               type=click.Path(file_okay=False, dir_okay=True),
               help="Input data directory.")
 @click.option("--output-dir", default="results/",
               type=click.Path(file_okay=False, dir_okay=True),
               help="Output directory.")
-def main(benchmark_name, dataset_name, method_name, num_runs, input_dir,
-         output_dir):
+def main(benchmark_name, dataset_name, method_name, num_runs, num_iterations,
+         eta, min_budget, max_budget, gamma, num_random_init, random_rate,
+         num_restarts, batch_size, num_steps_per_iter, optimizer, num_layers,
+         num_units, activation, input_dir, output_dir):
 
     Worker, worker_kws = get_worker(benchmark_name, dataset_name=dataset_name,
                                     input_dir=input_dir)
 
-    # TODO: Make these command-line arguments
-    num_iterations = 500
+    name = benchmark_name if dataset_name is None else \
+        f"{benchmark_name}_{dataset_name}"
 
-    gamma = 1/3
-    num_random_init = 10
-    random_rate = 1/3
-    num_restarts = 3
-    batch_size = 64
-    num_steps_per_iter = 100
-
-    optimizer = "adam"
-    num_layers = 2
-    num_units = 32
-    activation = "relu"
-
-    eta = 3
-    min_budget = 100
-    max_budget = 100
-
-    output_path = Path(output_dir).joinpath(f"{benchmark_name}_{dataset_name}",
-                                            method_name)
+    output_path = Path(output_dir).joinpath(name, method_name)
     output_path.mkdir(parents=True, exist_ok=True)
+
+    options = dict(num_iterations=num_iterations,
+                   eta=eta, min_budget=min_budget, max_budget=max_budget,
+                   gamma=gamma, num_random_init=num_random_init,
+                   random_rate=random_rate, num_restarts=num_restarts,
+                   batch_size=batch_size, num_steps_per_iter=num_steps_per_iter,
+                   optimizer=optimizer, num_layers=num_layers,
+                   num_units=num_units, activation=activation)
+    with open(output_path.joinpath("options.json"), 'w') as f:
+        json.dump(options, f, sort_keys=True, indent=2)
 
     for run_id in range(num_runs):
 

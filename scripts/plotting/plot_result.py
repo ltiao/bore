@@ -100,6 +100,8 @@ def merge_stack_runs(series_dict, run_key="run", y_key="regret_best"):
 
 def get_error_mins(benchmark_name, data_dir=None, budget=100):
 
+    print(benchmark_name)
+
     if not benchmark_name.startswith("fcnet"):
 
         errors_mins = {
@@ -218,7 +220,9 @@ def main(benchmark_name, input_dir, methods, ci, context, style, palette,
     METHOD_PRETTY_NAMES = {
         "random": "Random Search",
         "tpe": "TPE",
-        "bore": "BORE"
+        "bore": "BORE",
+        "bore-0.15": r"BORE $\gamma=0.15$",
+        "bore-sigmoid": r"BORE (with sigmoid)"
     }
 
     num_runs = 20
@@ -231,12 +235,31 @@ def main(benchmark_name, input_dir, methods, ci, context, style, palette,
     frames = []
     for method in methods:
 
-        series = load_runs(input_path.joinpath(benchmark_name, method),
-                           runs=num_runs, error_min=error_min)
-        frame = merge_stack_runs(series)
-        frames.append(frame.assign(method=method))
+        for run in range(num_runs):
+
+            path = input_path.joinpath(benchmark_name, method, f"{run:03d}.csv")
+            frame = pd.read_csv(path, index_col=0).assign(run=run)
+
+            best = frame.error.cummin()
+            elapsed = frame.cost.cumsum()
+            frame = frame.assign(best=best, elapsed=elapsed)
+
+            if error_min is not None:
+                regret = (error_min - frame.error).abs()
+                regret_best = regret.cummin()
+                frame = frame.assign(regret=regret, regret_best=regret_best, method=method)
+
+            frames.append(frame)
+
+        # series = load_runs(input_path.joinpath(benchmark_name, method),
+        #                    runs=num_runs, error_min=error_min)
+        # frame = merge_stack_runs(series)
+        # frames.append(frame.assign(method=method))
 
     data = pd.concat(frames, axis="index", ignore_index=True, sort=True)
+
+    print(data)
+
     data.replace(dict(method=METHOD_PRETTY_NAMES), inplace=True)
     # data.replace({"optimizer": {"protein_structure": "Protein Structure"}}, inplace=True)
     data.rename(lambda s: s.replace('_', ' '), axis="columns", inplace=True)
@@ -246,7 +269,7 @@ def main(benchmark_name, input_dir, methods, ci, context, style, palette,
     fig, ax = plt.subplots()
     sns.despine(fig=fig, ax=ax, top=True)
 
-    sns.lineplot(x="elapsed", y="regret best",
+    sns.lineplot(x="task", y="regret best",
                  hue="method", hue_order=hue_order,
                  style="method", style_order=style_order,
                  # units="run", estimator=None,
@@ -262,20 +285,20 @@ def main(benchmark_name, input_dir, methods, ci, context, style, palette,
     # ax.set_ylim(1e-1, -error_min)
 
     for ext in extension:
-        fig.savefig(output_path.joinpath(f"regret_vs_elapsed_{context}_{suffix}.{ext}"),
+        fig.savefig(output_path.joinpath(f"iteration_vs_elapsed_{context}_{suffix}.{ext}"),
                     bbox_inches="tight")
 
     plt.show()
 
-    g = sns.relplot(x="elapsed", y="regret", hue="run",
-                    col="method", palette="tab20",
-                    alpha=0.6, kind="scatter", data=data)
-    g.map(sns.lineplot, "task", "regret best", "run",
-          palette="tab20", linewidth=2.0, alpha=0.8)
-    g.set_axis_labels("iteration", "regret")
+    # g = sns.relplot(x="elapsed", y="regret", hue="run",
+    #                 col="method", palette="tab20",
+    #                 alpha=0.6, kind="scatter", data=data)
+    # g.map(sns.lineplot, "task", "regret best", "run",
+    #       palette="tab20", linewidth=2.0, alpha=0.8)
+    # g.set_axis_labels("iteration", "regret")
 
-    for ext in extension:
-        g.savefig(output_path.joinpath(f"regret_vs_elapsed_all_{context}_{suffix}.{ext}"))
+    # for ext in extension:
+    #     g.savefig(output_path.joinpath(f"regret_vs_elapsed_all_{context}_{suffix}.{ext}"))
 
     # g = sns.relplot(x="task", y="error", hue="epoch",
     #                 col="run", col_wrap=4, palette="Dark2",
