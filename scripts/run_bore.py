@@ -20,6 +20,7 @@ logging.basicConfig(level=logging.INFO)
 
 
 workers = dict(
+    # goldstein_price=GoldsteinPriceWorker,
     branin=BraninWorker,
     hartmann3d=Hartmann3DWorker,
     hartmann6d=Hartmann6DWorker,
@@ -50,7 +51,8 @@ def get_worker(benchmark_name, dataset_name=None, input_dir=None):
 @click.option("--eta", default=3, help="Successive halving reduction factor.")
 @click.option("--min-budget", default=100)
 @click.option("--max-budget", default=100)
-@click.option("--gamma", default=0.15, help="Quantile, or mixing proportion.")
+@click.option("--gamma", default=0.15, type=click.FloatRange(0., 1.),
+              help="Quantile, or mixing proportion.")
 @click.option("--num-random-init", default=10)
 @click.option("--random-rate", default=1/3, type=click.FloatRange(0., 1.))
 @click.option("--num-restarts", default=3)
@@ -60,6 +62,10 @@ def get_worker(benchmark_name, dataset_name=None, input_dir=None):
 @click.option("--num-layers", default=2)
 @click.option("--num-units", default=32)
 @click.option("--activation", default="relu")
+@click.option('--normalize/--no-normalize', default=True)
+@click.option("--method", default="L-BFGS-B")
+@click.option("--max-iter", default=100)
+@click.option("--ftol", default=1e-2)
 @click.option("--input-dir", default="datasets/fcnet_tabular_benchmarks",
               type=click.Path(file_okay=False, dir_okay=True),
               help="Input data directory.")
@@ -69,7 +75,10 @@ def get_worker(benchmark_name, dataset_name=None, input_dir=None):
 def main(benchmark_name, dataset_name, method_name, num_runs, num_iterations,
          eta, min_budget, max_budget, gamma, num_random_init, random_rate,
          num_restarts, batch_size, num_steps_per_iter, optimizer, num_layers,
-         num_units, activation, input_dir, output_dir):
+         num_units, activation, normalize, method, max_iter, ftol, input_dir,
+         output_dir):
+
+    print(f"Normalized {normalize}!!!!")
 
     Worker, worker_kws = get_worker(benchmark_name, dataset_name=dataset_name,
                                     input_dir=input_dir)
@@ -86,7 +95,9 @@ def main(benchmark_name, dataset_name, method_name, num_runs, num_iterations,
                    random_rate=random_rate, num_restarts=num_restarts,
                    batch_size=batch_size, num_steps_per_iter=num_steps_per_iter,
                    optimizer=optimizer, num_layers=num_layers,
-                   num_units=num_units, activation=activation)
+                   num_units=num_units, activation=activation,
+                   normalize=normalize, method=method, max_iter=max_iter,
+                   ftol=ftol)
     with open(output_path.joinpath("options.json"), 'w') as f:
         json.dump(options, f, sort_keys=True, indent=2)
 
@@ -118,8 +129,12 @@ def main(benchmark_name, dataset_name, method_name, num_runs, num_iterations,
                   optimizer=optimizer,
                   num_layers=num_layers,
                   num_units=num_units,
-                  seed=run_id,
                   activation=activation,
+                  normalize=normalize,
+                  method=method,
+                  max_iter=max_iter,
+                  ftol=ftol,
+                  seed=run_id,
                   nameserver=ns_host,
                   nameserver_port=ns_port,
                   ping_interval=10)

@@ -8,6 +8,14 @@ from tabular_benchmarks import (FCNetProteinStructureBenchmark,
                                 FCNetParkinsonsTelemonitoringBenchmark)
 
 
+def goldstein_price(x, y):
+
+    a = 1 + (x + y + 1)**2 * (19 - 14*x + 3*x**2 - 14*y + 6*x*y + 3*y**2)
+    b = 30 + (2*x - 3*y)**2 * (18 - 32*x + 12*x**2 - 48*y + 36*x*y + 27*y**2)
+
+    return a * b
+
+
 def branin(x, y, a=1.0, b=5.1/(4*np.pi**2), c=5.0/np.pi, r=6.0, s=10.0,
            t=1.0/(8*np.pi)):
     return a*(y - b * x**2 + c*x - r)**2 + s*(1 - t)*np.cos(x) + s
@@ -32,9 +40,7 @@ def hartmann(x, alpha, A, P):
 class BraninWorker(Worker):
 
     def compute(self, config, budget, **kwargs):
-
         y = branin(**config)
-
         return dict(loss=y, info=None)
 
     @staticmethod
@@ -42,6 +48,20 @@ class BraninWorker(Worker):
         cs = CS.ConfigurationSpace()
         cs.add_hyperparameter(CS.UniformFloatHyperparameter("x", lower=-5, upper=10))
         cs.add_hyperparameter(CS.UniformFloatHyperparameter("y", lower=0, upper=15))
+        return cs
+
+
+class GoldsteinPriceWorker(Worker):
+
+    def compute(self, config, budget, **kwargs):
+        y = goldstein_price(**config)
+        return dict(loss=y, info=None)
+
+    @staticmethod
+    def get_config_space():
+        cs = CS.ConfigurationSpace()
+        cs.add_hyperparameter(CS.UniformFloatHyperparameter("x", lower=0, upper=1))
+        cs.add_hyperparameter(CS.UniformFloatHyperparameter("y", lower=0, upper=1))
         return cs
 
 

@@ -4,24 +4,27 @@ from numbers import Integral
 from pathlib import Path
 
 
-def dataframe_from_result(result):
+def dataframe_from_result(results):
 
     rows = []
 
-    for task, config_id in enumerate(result.data):
+    for task, config_id in enumerate(results.data):
 
-        d = result.data[config_id]
+        d = results.data[config_id]
         bracket, _, _ = config_id
 
         for epoch in d.results:
 
-            rows.append(dict(task=task,
-                             bracket=bracket,
-                             epoch=int(epoch),
-                             error=d.results[epoch]["loss"],
-                             cost=d.results[epoch]["info"],
-                             submitted=d.time_stamps[epoch]["submitted"],
-                             runtime=d.time_stamps[epoch]["finished"]))
+            row = dict(task=task,
+                       bracket=bracket,
+                       epoch=int(epoch),
+                       loss=d.results[epoch]["loss"],
+                       info=d.results[epoch]["info"],
+                       submitted=d.time_stamps[epoch]["submitted"],
+                       started=d.time_stamps[epoch]["started"],
+                       finished=d.time_stamps[epoch]["finished"])
+            row.update(d.config)
+            rows.append(row)
 
     return pd.DataFrame(rows)
 

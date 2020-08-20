@@ -221,8 +221,9 @@ def main(benchmark_name, input_dir, methods, ci, context, style, palette,
         "random": "Random Search",
         "tpe": "TPE",
         "bore": "BORE",
-        "bore-0.15": r"BORE $\gamma=0.15$",
-        "bore-sigmoid": r"BORE (with sigmoid)"
+        "bore-elu-normalize-ftol": "BORE (elu)",
+        "bore-relu-normalize-ftol": "BORE (relu)",
+        "bore-relu-normalize-high-ftol": "BORE (relu high ftol)"
     }
 
     num_runs = 20
@@ -238,16 +239,23 @@ def main(benchmark_name, input_dir, methods, ci, context, style, palette,
         for run in range(num_runs):
 
             path = input_path.joinpath(benchmark_name, method, f"{run:03d}.csv")
-            frame = pd.read_csv(path, index_col=0).assign(run=run)
+            frame = pd.read_csv(path, index_col=0).assign(run=run, method=method)
 
-            best = frame.error.cummin()
-            elapsed = frame.cost.cumsum()
+            try:
+                loss = frame["loss"]
+                cost = frame["info"]
+            except KeyError:
+                loss = frame["error"]
+                cost = frame["cost"]
+
+            best = loss.cummin()
+            elapsed = cost.cumsum()
             frame = frame.assign(best=best, elapsed=elapsed)
 
             if error_min is not None:
-                regret = (error_min - frame.error).abs()
+                regret = (error_min - loss).abs()
                 regret_best = regret.cummin()
-                frame = frame.assign(regret=regret, regret_best=regret_best, method=method)
+                frame = frame.assign(regret=regret, regret_best=regret_best)
 
             frames.append(frame)
 
@@ -273,11 +281,12 @@ def main(benchmark_name, input_dir, methods, ci, context, style, palette,
                  hue="method", hue_order=hue_order,
                  style="method", style_order=style_order,
                  # units="run", estimator=None,
-                 # ci=ci,
+                 # ci=None,
                  err_kws=dict(edgecolor='none'),
                  data=data, ax=ax)
 
-    ax.set_xlabel("wall-clock time elapsed (s)")
+    # ax.set_xlabel("wall-clock time elapsed (s)")
+    ax.set_xlabel("iteration")
     ax.set_ylabel("incumbent regret")
 
     ax.set_xscale("log")

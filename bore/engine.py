@@ -1,14 +1,13 @@
 import numpy as np
 import tensorflow as tf
 
-# from tensorflow.keras.initializers import GlorotUniform
-from tensorflow.keras.regularizers import l2
-
 from scipy.optimize import minimize
+
+from tensorflow.keras.losses import BinaryCrossentropy
+# from tensorflow.keras.initializers import GlorotUniform
 
 from .types import DenseConfigurationSpace, DenseConfiguration
 from .models import DenseSequential
-from .losses import binary_crossentropy_from_logits
 from .decorators import unbatch, value_and_gradient, numpy_io
 from .optimizers import multi_start
 
@@ -31,7 +30,8 @@ class BORE(HyperBand):
                  gamma=None, num_random_init=10, random_rate=0.25,
                  num_restarts=10, batch_size=64, num_steps_per_iter=1000,
                  optimizer="adam", num_layers=2, num_units=32,
-                 activation="relu", seed=None, **kwargs):
+                 activation="relu", normalize=True, method="L-BFGS-B",
+                 max_iter=100, ftol=1e-2, seed=None, **kwargs):
 
         if gamma is None:
             gamma = 1/eta
@@ -41,7 +41,9 @@ class BORE(HyperBand):
                  random_rate=random_rate, num_restarts=num_restarts,
                  batch_size=batch_size, num_steps_per_iter=num_steps_per_iter,
                  optimizer=optimizer, num_layers=num_layers,
-                 num_units=num_units, activation=activation, seed=seed)
+                 num_units=num_units, activation=activation,
+                 normalize=normalize, method=method, max_iter=max_iter,
+                 ftol=ftol, seed=seed)
         # (LT): Note this is using the *grandparent* class initializer to
         # replace the config_generator!
         super(HyperBand, self).__init__(config_generator=cg, **kwargs)
@@ -76,20 +78,32 @@ class DRE(base_config_generator):
     class to implement random sampling from a ConfigSpace
     """
     def __init__(self, config_space, gamma=1/3, num_random_init=10,
-                 random_rate=0.25, num_restarts=10, batch_size=64,
+                 random_rate=0.25, num_restarts=3, batch_size=64,
                  num_steps_per_iter=1000, optimizer="adam", num_layers=2,
-                 num_units=32, activation="relu", seed=None, **kwargs):
+                 num_units=32, activation="relu", normalize=True,
+                 method="L-BFGS-B", max_iter=100, ftol=1e-2, seed=None,
+                 **kwargs):
 
         super(DRE, self).__init__(**kwargs)
 
+        assert 0. <= gamma < 1., "`gamma` must be in [0, 1)"
+        assert 0. <= random_rate < 1., "`random_rate` must be in [0, 1)"
+        assert num_random_init > 0
+        assert num_restarts > 0
+
         self.config_space = DenseConfigurationSpace(config_space, seed=seed)
+        self.bounds = self.config_space.get_bounds()
+
+        self.logit = self._build_compile_network(num_layers, num_units,
+                                                 activation, optimizer)
+        self.loss = self._build_loss(self.logit, normalize=normalize)
+        self.minimizer = self._build_minimizer(num_restarts=num_restarts,
+                                               method=method, ftol=ftol,
+                                               max_iter=max_iter)
 
         self.gamma = gamma
         self.num_random_init = num_random_init
-
-        assert 0. <= random_rate <= 1., "random rate must be in [0, 1]"
         self.random_rate = random_rate
-
         self.num_restarts = num_restarts
 
         self.batch_size = batch_size
@@ -98,44 +112,60 @@ class DRE(base_config_generator):
         self.config_arrs = []
         self.losses = []
 
-        l2_factor = 1e-4
-
-        self._init_model(num_layers, num_units, activation, optimizer, l2_factor)
-
         self.seed = seed
         self.random_state = np.random.RandomState(seed)
 
-    def _init_model(self, num_layers, num_units, activation, optimizer, l2_factor):
+    @staticmethod
+    def _build_compile_network(num_layers, num_units, activation, optimizer):
 
-        self.model = DenseSequential(output_dim=1,
-                                     num_layers=num_layers,
-                                     num_units=num_units,
-                                     layer_kws=dict(activation=activation,
-                                                    kernel_regularizer=l2(l2_factor))) # TODO(LT): make this an argument
-        self.model.compile(optimizer=optimizer, metrics=["accuracy"],
-                           loss=binary_crossentropy_from_logits)
+        network = DenseSequential(output_dim=1,
+                                  num_layers=num_layers,
+                                  num_units=num_units,
+                                  layer_kws=dict(activation=activation))
+        network.compile(optimizer=optimizer, metrics=["accuracy"],
+                        loss=BinaryCrossentropy(from_logits=True))
+        return network
 
     @staticmethod
-    def make_minimizer(num_restarts, method="L-BFGS-B", max_iter=10000,
-                       tol=1e-8):
+    def _build_loss(logit, normalize=True):
 
-        @multi_start(num_restarts=num_restarts)
-        def multi_start_minimizer(fn, x0, bounds):
-            return minimize(fn, x0=x0, method=method, jac=True, bounds=bounds,
-                            tol=tol, options=dict(maxiter=max_iter))
-
-        return multi_start_minimizer
-
-    def make_minimizee(self):
+        if normalize:
+            activation = tf.sigmoid
+        else:
+            activation = tf.identity
 
         @numpy_io
         @value_and_gradient
         @unbatch
-        def func(x):
+        def loss(x):
+            return - activation(logit(x))
 
-            return - tf.sigmoid(self.model(x))
+        return loss
 
-        return func
+    @staticmethod
+    def _build_minimizer(num_restarts, method="L-BFGS-B", max_iter=100,
+                         ftol=1e-2):
+
+        @multi_start(num_restarts=num_restarts)
+        def multi_start_minimizer(fn, x0, bounds):
+            return minimize(fn, x0=x0, method=method, jac=True, bounds=bounds,
+                            options=dict(maxiter=max_iter, ftol=ftol))
+
+        return multi_start_minimizer
+
+    def _load_data(self):
+        X = np.vstack(self.config_arrs)
+        y = np.hstack(self.losses)
+        return X, y
+
+    def _load_labels(self, y):
+        tau = np.quantile(y, q=self.gamma)
+        return np.less(y, tau)
+
+    def _get_steps_per_epoch(self, dataset_size):
+        steps_per_epoch = int(np.ceil(np.true_divide(dataset_size,
+                                                     self.batch_size)))
+        return steps_per_epoch
 
     def get_config(self, budget):
 
@@ -155,20 +185,15 @@ class DRE(base_config_generator):
                              "Returning random candidate ...")
             return (config_random_dict, {})
 
-        # Model fitting
-        X = np.vstack(self.config_arrs)
-        y = np.hstack(self.losses)
+        X, y = self._load_data()
+        z = self._load_labels(y)
 
-        y_threshold = np.quantile(y, q=self.gamma)
-        z = np.less_equal(y, y_threshold)
-
-        steps_per_epoch = int(np.ceil(np.true_divide(dataset_size,
-                                                     self.batch_size)))
+        steps_per_epoch = self._get_steps_per_epoch(dataset_size)
         num_epochs = self.num_steps_per_iter // steps_per_epoch
 
-        self.model.fit(X, z, epochs=num_epochs, batch_size=self.batch_size,
+        self.logit.fit(X, z, epochs=num_epochs, batch_size=self.batch_size,
                        verbose=False)  # TODO(LT): Make this an argument
-        loss, accuracy = self.model.evaluate(X, z, verbose=False)
+        loss, accuracy = self.logit.evaluate(X, z, verbose=False)
 
         self.logger.info(f"[Model fit: loss={loss:.3f}, "
                          f"accuracy={accuracy:.3f}] "
@@ -177,36 +202,32 @@ class DRE(base_config_generator):
                          f"steps per epoch: {steps_per_epoch}, "
                          f"num steps per iter: {self.num_steps_per_iter}, "
                          f"num epochs: {num_epochs}")
-        self.logger.debug(X)
-        self.logger.debug(y)
 
         # Maximize acquisition function
-
-        # TODO(LT): The following three assignments can all be done at
-        #   initialization time
-        minimize = self.make_minimizer(num_restarts=self.num_restarts)
-        func = self.make_minimizee()
-        bounds = self.config_space.get_bounds()
-
         self.logger.debug("Beginning multi-start maximization with "
                           f"{self.num_restarts} starts...")
 
-        results = minimize(func, bounds, random_state=self.random_state)
+        results = self.minimizer(self.loss, self.bounds,
+                                 random_state=self.random_state)
 
         res_best = None
         for i, res in enumerate(results):
             self.logger.debug(f"[Maximum {i+1:02d}/{self.num_restarts:02d}: "
                               f"logit={-res.fun:.3f}] success: {res.success}, "
                               f"iterations: {res.nit:02d}, status: {res.status}"
-                              f" ({res.message.decode('utf-8')})")
+                              f" ({res.message})")
 
-            if res.success and not is_duplicate(res.x, self.config_arrs):
+            # TODO(LT): Create Enum type for these status codes
+            if (res.status == 0 or res.status == 9) and \
+                    not is_duplicate(res.x, self.config_arrs):
                 # if (res_best is not None) *implies* (res.fun < res_best.fun)
                 # (i.e. material implication) is logically equivalent to below
                 if res_best is None or res.fun < res_best.fun:
                     res_best = res
 
         if res_best is None:
+            # TODO(LT): It's actually important to report what one of these
+            # occurred...
             self.logger.warn("[Glob. maximum: not found!] Either optimization "
                              f"failed in all {self.num_restarts} starts, or "
                              "all maxima found have been evaluated previously!"
