@@ -7,23 +7,8 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from pathlib import Path
+from utils import GOLDEN_RATIO, WIDTH, size
 
-GOLDEN_RATIO = 0.5 * (1 + np.sqrt(5))
-
-
-def pt_to_in(x):
-
-    pt_per_in = 72.27
-    return x / pt_per_in
-
-
-def size(width, aspect=GOLDEN_RATIO):
-
-    width_in = pt_to_in(width)
-    return (width_in, width_in / aspect)
-
-
-WIDTH = 397.48499
 OUTPUT_DIR = "figures/"
 
 

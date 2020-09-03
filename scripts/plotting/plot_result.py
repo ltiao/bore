@@ -1,7 +1,6 @@
 import sys
 import click
 
-import numpy as np
 import pandas as pd
 
 import matplotlib.pyplot as plt
@@ -9,6 +8,7 @@ import seaborn as sns
 
 # from bore.utils import load_runs
 from pathlib import Path
+from utils import GOLDEN_RATIO, WIDTH, size
 
 import ConfigSpace as CS
 from tabular_benchmarks import (FCNetProteinStructureBenchmark,
@@ -16,19 +16,7 @@ from tabular_benchmarks import (FCNetProteinStructureBenchmark,
                                 FCNetNavalPropulsionBenchmark,
                                 FCNetParkinsonsTelemonitoringBenchmark)
 
-GOLDEN_RATIO = 0.5 * (1 + np.sqrt(5))
-
-
-def pt_to_in(x):
-
-    pt_per_in = 72.27
-    return x / pt_per_in
-
-
-def size(width, aspect=GOLDEN_RATIO):
-
-    width_in = pt_to_in(width)
-    return (width_in, width_in / aspect)
+OUTPUT_DIR = "figures/"
 
 
 def extract_series(frame, index="elapsed", column="regret_best"):
@@ -181,10 +169,6 @@ def get_error_mins(benchmark_name, data_dir=None, budget=100):
     return y
 
 
-WIDTH = 397.48499
-OUTPUT_DIR = "figures/"
-
-
 @click.command()
 @click.argument("benchmark_name")
 @click.argument("input_dir", default="results",
@@ -204,7 +188,8 @@ def main(benchmark_name, input_dir, methods, ci, context, style, palette,
          width, aspect, extension, output_dir):
 
     figsize = size(width, aspect)
-    suffix = f"{width:.0f}x{width/aspect:.0f}"
+    height = width / aspect
+    suffix = f"{width:.0f}x{height:.0f}"
 
     rc = {
         "figure.figsize": figsize,
@@ -221,9 +206,12 @@ def main(benchmark_name, input_dir, methods, ci, context, style, palette,
         "random": "Random Search",
         "tpe": "TPE",
         "bore": "BORE",
-        "bore-elu-normalize-ftol": "BORE (elu)",
-        "bore-relu-normalize-ftol": "BORE (relu)",
-        "bore-relu-normalize-high-ftol": "BORE (relu high ftol)"
+        # "boredom": "BORE II",
+        # "boredom-real": "BORE III",
+        "bore-sigmoid-elu-ftol-1e-2-gamma-0.33333333333333333333": "BORE",
+        "boredom-real": "BORE",
+        "bore-logit-elu-ftol-1e-2-gamma-0.33333333333333333333": "BORE",
+        "bore-sigmoid-elu-ftol-1e-9-random-0.1": "BORE"
     }
 
     num_runs = 20
@@ -289,12 +277,12 @@ def main(benchmark_name, input_dir, methods, ci, context, style, palette,
     ax.set_xlabel("iteration")
     ax.set_ylabel("incumbent regret")
 
-    ax.set_xscale("log")
+    # ax.set_xscale("log")
     ax.set_yscale("log")
     # ax.set_ylim(1e-1, -error_min)
 
     for ext in extension:
-        fig.savefig(output_path.joinpath(f"iteration_vs_elapsed_{context}_{suffix}.{ext}"),
+        fig.savefig(output_path.joinpath(f"regret_iterations_{context}_{suffix}.{ext}"),
                     bbox_inches="tight")
 
     plt.show()

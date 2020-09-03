@@ -41,7 +41,7 @@ def value_and_gradient(value_fn):
 
         # Equivalent to `tfp.math.value_and_gradient(value_fn, x)`, with the
         # only difference that the gradients preserve their `dtype` rather than
-        # casting to tf.float32, which is problematic for scipy optimize
+        # casting to `tf.float32`, which is problematic for scipy.optimize
         with tf.GradientTape(watch_accessed_variables=False) as tape:
             tape.watch(x)
             val = value_fn(x)

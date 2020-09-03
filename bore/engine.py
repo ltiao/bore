@@ -4,16 +4,17 @@ import tensorflow as tf
 from scipy.optimize import minimize
 
 from tensorflow.keras.losses import BinaryCrossentropy
-# from tensorflow.keras.initializers import GlorotUniform
 
 from .types import DenseConfigurationSpace, DenseConfiguration
 from .models import DenseSequential
 from .decorators import unbatch, value_and_gradient, numpy_io
 from .optimizers import multi_start
 
-# from hpbandster.core.master import Master
 from hpbandster.optimizers.hyperband import HyperBand
 from hpbandster.core.base_config_generator import base_config_generator
+
+
+minimize_multi_start = multi_start(minimizer_fn=minimize)
 
 
 def is_duplicate(x, xs, rtol=1e-5, atol=1e-8):
@@ -97,14 +98,15 @@ class DRE(base_config_generator):
         self.logit = self._build_compile_network(num_layers, num_units,
                                                  activation, optimizer)
         self.loss = self._build_loss(self.logit, normalize=normalize)
-        self.minimizer = self._build_minimizer(num_restarts=num_restarts,
-                                               method=method, ftol=ftol,
-                                               max_iter=max_iter)
 
         self.gamma = gamma
         self.num_random_init = num_random_init
         self.random_rate = random_rate
+
         self.num_restarts = num_restarts
+        self.method = method
+        self.ftol = ftol
+        self.max_iter = max_iter
 
         self.batch_size = batch_size
         self.num_steps_per_iter = num_steps_per_iter
@@ -114,6 +116,35 @@ class DRE(base_config_generator):
 
         self.seed = seed
         self.random_state = np.random.RandomState(seed)
+
+    def _array_from_dict(self, dct):
+        config = DenseConfiguration(self.config_space, values=dct)
+        return config.to_array()
+
+    def _dict_from_array(self, array):
+        config = DenseConfiguration.from_array(self.config_space,
+                                               array_dense=array)
+        return config.get_dictionary()
+
+    def _get_dataset_size(self):
+        return len(self.config_arrs)
+
+    def _load_data(self):
+        X = np.vstack(self.config_arrs)
+        y = np.hstack(self.losses)
+        return X, y
+
+    def _load_labels(self, y):
+        # TODO(LT): we can use clever data structures like heaps to make this
+        #   labelling constant-time, but this is probably a premature
+        #   optimization at this time...
+        tau = np.quantile(y, q=self.gamma)
+        return np.less(y, tau)
+
+    def _get_steps_per_epoch(self, dataset_size):
+        steps_per_epoch = int(np.ceil(np.true_divide(dataset_size,
+                                                     self.batch_size)))
+        return steps_per_epoch
 
     @staticmethod
     def _build_compile_network(num_layers, num_units, activation, optimizer):
@@ -142,52 +173,12 @@ class DRE(base_config_generator):
 
         return loss
 
-    @staticmethod
-    def _build_minimizer(num_restarts, method="L-BFGS-B", max_iter=100,
-                         ftol=1e-2):
-
-        @multi_start(num_restarts=num_restarts)
-        def multi_start_minimizer(fn, x0, bounds):
-            return minimize(fn, x0=x0, method=method, jac=True, bounds=bounds,
-                            options=dict(maxiter=max_iter, ftol=ftol))
-
-        return multi_start_minimizer
-
-    def _load_data(self):
-        X = np.vstack(self.config_arrs)
-        y = np.hstack(self.losses)
-        return X, y
-
-    def _load_labels(self, y):
-        tau = np.quantile(y, q=self.gamma)
-        return np.less(y, tau)
-
-    def _get_steps_per_epoch(self, dataset_size):
-        steps_per_epoch = int(np.ceil(np.true_divide(dataset_size,
-                                                     self.batch_size)))
-        return steps_per_epoch
-
-    def get_config(self, budget):
-
-        dataset_size = len(self.config_arrs)
-
-        config_random = self.config_space.sample_configuration()
-        config_random_dict = config_random.get_dictionary()
-
-        if dataset_size < self.num_random_init:
-            self.logger.debug(f"Completed {dataset_size}/{self.num_random_init}"
-                              " initial runs. Returning random candidate...")
-            return (config_random_dict, {})
-
-        if self.random_state.binomial(p=self.random_rate, n=1):
-            self.logger.info("[Glob. maximum: skipped "
-                             f"(prob={self.random_rate:.2f})] "
-                             "Returning random candidate ...")
-            return (config_random_dict, {})
+    def _update_model(self):
 
         X, y = self._load_data()
         z = self._load_labels(y)
 
+        dataset_size = self._get_dataset_size()
         steps_per_epoch = self._get_steps_per_epoch(dataset_size)
         num_epochs = self.num_steps_per_iter // steps_per_epoch
 
@@ -203,15 +194,21 @@ class DRE(base_config_generator):
                          f"num steps per iter: {self.num_steps_per_iter}, "
                          f"num epochs: {num_epochs}")
 
-        # Maximize acquisition function
+    def _get_maximum(self):
+
         self.logger.debug("Beginning multi-start maximization with "
                           f"{self.num_restarts} starts...")
 
-        results = self.minimizer(self.loss, self.bounds,
-                                 random_state=self.random_state)
+        results = minimize_multi_start(self.loss, self.bounds,
+                                       num_restarts=self.num_restarts,
+                                       method=self.method, jac=True,
+                                       options=dict(maxiter=self.max_iter,
+                                                    ftol=self.ftol),
+                                       random_state=self.random_state)
 
         res_best = None
         for i, res in enumerate(results):
+            # TODO(LT): This currently assumes `normalize=False`
             self.logger.debug(f"[Maximum {i+1:02d}/{self.num_restarts:02d}: "
                               f"logit={-res.fun:.3f}] success: {res.success}, "
                               f"iterations: {res.nit:02d}, status: {res.status}"
@@ -225,7 +222,32 @@ class DRE(base_config_generator):
                 if res_best is None or res.fun < res_best.fun:
                     res_best = res
 
-        if res_best is None:
+        return res_best
+
+    def get_config(self, budget):
+
+        dataset_size = self._get_dataset_size()
+
+        config_random = self.config_space.sample_configuration()
+        config_random_dict = config_random.get_dictionary()
+
+        if dataset_size < self.num_random_init:
+            self.logger.debug(f"Completed {dataset_size}/{self.num_random_init}"
+                              " initial runs. Returning random candidate...")
+            return (config_random_dict, {})
+
+        if self.random_state.binomial(p=self.random_rate, n=1):
+            self.logger.info("[Glob. maximum: skipped "
+                             f"(prob={self.random_rate:.2f})] "
+                             "Returning random candidate ...")
+            return (config_random_dict, {})
+
+        # Update model
+        self._update_model()
+
+        # Maximize acquisition function
+        opt = self._get_maximum()
+        if opt is None:
             # TODO(LT): It's actually important to report what one of these
             # occurred...
             self.logger.warn("[Glob. maximum: not found!] Either optimization "
@@ -234,15 +256,14 @@ class DRE(base_config_generator):
                              " Returning random candidate...")
             return (config_random_dict, {})
 
-        self.logger.info(f"[Glob. maximum: logit={-res_best.fun:.3f}, "
-                         f"prob={tf.sigmoid(-res_best.fun):.3f}, "
-                         f"rel. ratio={tf.sigmoid(-res_best.fun)/self.gamma:.3f}] "
-                         f"x={res_best.x}")
+        # TODO(LT): This currently assumes `normalize=False`
+        self.logger.info(f"[Glob. maximum: logit={-opt.fun:.3f}, "
+                         f"prob={tf.sigmoid(-opt.fun):.3f}, "
+                         f"rel. ratio={tf.sigmoid(-opt.fun)/self.gamma:.3f}] "
+                         f"x={opt.x}")
 
-        config_opt_arr = res_best.x
-        config_opt = DenseConfiguration.from_array(self.config_space,
-                                                   array_dense=config_opt_arr)
-        config_opt_dict = config_opt.get_dictionary()
+        config_opt_arr = opt.x
+        config_opt_dict = self._dict_from_array(config_opt_arr)
 
         return (config_opt_dict, {})
 
@@ -250,13 +271,13 @@ class DRE(base_config_generator):
 
         super(DRE, self).new_result(job)
 
-        # TODO: ignoring this right now
+        # TODO(LT): support multi-fidelity
         budget = job.kwargs["budget"]
 
-        loss = job.result["loss"]
         config_dict = job.kwargs["config"]
-        config = DenseConfiguration(self.config_space, values=config_dict)
-        config_arr = config.to_array()
+        config_arr = self._array_from_dict(config_dict)
 
-        self.losses.append(loss)
+        loss = job.result["loss"]
+
         self.config_arrs.append(config_arr)
+        self.losses.append(loss)

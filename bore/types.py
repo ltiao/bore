@@ -42,13 +42,9 @@ class DenseConfigurationSpace(CS.ConfigurationSpace):
         #             lowers.append(0.)
         #             uppers.append(1.)
         #     elif isinstance(hp, CS.UniformFloatHyperparameter):
-        #         # TODO(LT): These should never not be 0. and 1. respectively,
-        #         #   so I am really overcomplicating things here...
         #         lowers.append(hp._inverse_transform(hp.lower))
         #         uppers.append(hp._inverse_transform(hp.upper))
         #     elif isinstance(hp, CS.UniformIntegerHyperparameter):
-        #         # TODO(LT): These should never not be 0. and 1. respectively,
-        #         #   so I am really overcomplicating things here...
         #         lowers.append(hp._inverse_transform(hp.lower - 1))
         #         uppers.append(hp._inverse_transform(hp.upper + 1))
         #     else:
@@ -60,6 +56,8 @@ class DenseConfigurationSpace(CS.ConfigurationSpace):
         # assert len(lowers) == self.size_dense
         # assert len(uppers) == self.size_dense
 
+        # All of the above commented code is equivalent to the following two
+        # lines...
         lowers = np.zeros(self.size_dense)
         uppers = np.ones(self.size_dense)
 

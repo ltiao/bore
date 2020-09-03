@@ -15,8 +15,6 @@ from tqdm import tqdm, trange
 from itertools import product
 
 from bore.benchmarks import branin
-
-
 from utils import GOLDEN_RATIO, WIDTH, size
 
 OUTPUT_DIR = "figures/"

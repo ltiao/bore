@@ -27,35 +27,23 @@ from sklearn.utils import check_random_state
 
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+from utils import GOLDEN_RATIO, WIDTH, size
+
 # shortcuts
 tfd = tfp.distributions
 kernels = tfp.math.psd_kernels
 
 kernel_cls = kernels.ExponentiatedQuadratic
 
-GOLDEN_RATIO = 0.5 * (1 + np.sqrt(5))
-WIDTH = 397.48499
 OUTPUT_DIR = "logs/figures/"
 
-NUM_INIT_RANDOM = 10
-NUM_INDEX_POINTS = 128
-PI = 0.15
+NUM_INIT_RANDOM = 15
+NUM_INDEX_POINTS = 512
+PI = 1/3
 BANDWIDTH = 0.1
 
 TEST_SIZE = 0.2
-SEED = 8989
-
-
-def pt_to_in(x):
-
-    pt_per_in = 72.27
-    return x / pt_per_in
-
-
-def size(width, aspect=GOLDEN_RATIO):
-
-    width_in = pt_to_in(width)
-    return (width_in, width_in / aspect)
+SEED = 8888
 
 
 def make_test_metric(X_train, y_train, X_test, y_test):

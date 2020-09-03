@@ -16,7 +16,7 @@ from bore.benchmarks import (Hartmann3DWorker, Hartmann6DWorker,
                              BoreholeWorker, FCNetWorker, BraninWorker)
 from bore.utils import dataframe_from_result
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
 
 workers = dict(
@@ -51,7 +51,7 @@ def get_worker(benchmark_name, dataset_name=None, input_dir=None):
 @click.option("--eta", default=3, help="Successive halving reduction factor.")
 @click.option("--min-budget", default=100)
 @click.option("--max-budget", default=100)
-@click.option("--gamma", default=0.15, type=click.FloatRange(0., 1.),
+@click.option("--gamma", default=1/3, type=click.FloatRange(0., 1.),
               help="Quantile, or mixing proportion.")
 @click.option("--num-random-init", default=10)
 @click.option("--random-rate", default=1/3, type=click.FloatRange(0., 1.))
