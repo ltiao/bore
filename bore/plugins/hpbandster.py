@@ -36,8 +36,9 @@ class BORE(HyperBand):
         # replace the config_generator!
         super(HyperBand, self).__init__(config_generator=cg, **kwargs)
 
-        # (LT): the following had to be copy-pasted as it is hard to
-        # follow the DRY design philosophy within the HpBandSter framework...
+        # (LT): the design of HpBandSter framework requires us to copy-paste
+        # the following boilerplate code. Cannot really just subclass and
+        # specify an alternative Configuration Generator.
 
         # Hyperband related stuff
         self.eta = eta
@@ -74,7 +75,7 @@ class RatioEstimator(base_config_generator):
 
         super(RatioEstimator, self).__init__(**kwargs)
 
-        assert 0. <= gamma < 1., "`gamma` must be in [0, 1)"
+        assert 0. < gamma < 1., "`gamma` must be in (0, 1)"
         assert 0. <= random_rate < 1., "`random_rate` must be in [0, 1)"
         assert num_random_init > 0
         assert num_restarts > 0

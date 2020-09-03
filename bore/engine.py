@@ -4,6 +4,9 @@ from scipy.optimize import minimize
 from .optimizers import multi_start
 
 
+# TODO(LT): Extract framework agnostic core enginer code from
+# `plugins.hpbandster` and place it here.
+
 def is_duplicate(x, xs, rtol=1e-5, atol=1e-8):
     # Clever ways of doing this would involve data structs. like KD-trees
     # or locality sensitive hashing (LSH), but these are premature

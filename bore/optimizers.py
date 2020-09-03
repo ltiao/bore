@@ -1,21 +1,5 @@
-import numpy as np
-
 from scipy.optimize import minimize, Bounds
 from sklearn.utils import check_random_state
-
-
-def deduplicate(results, atol=1e-6):
-
-    results_unique = []
-    for res in results:
-        # - There are more efficient data structures for this, such as a
-        #   KD-Tree or Locality Sensitive Hashing (LSH), but these are
-        #   premature optimizations at this time
-        if any(np.allclose(res_prev.x, res.x, atol=atol)
-               for res_prev in results_unique):
-            results_unique.append(res)
-
-    return results_unique
 
 
 def multi_start(minimizer_fn=minimize):
@@ -26,6 +10,9 @@ def multi_start(minimizer_fn=minimize):
 
         if not (num_restarts > 0):
             return []
+
+        results = new_minimizer(fn, bounds, num_restarts-1, random_state,
+                                *args, **kwargs)
 
         # TODO(LT): Allow alternative arbitary generator function callbacks
         # to support e.g. Gaussian sampling, low-discrepancy sequences, etc
@@ -41,8 +28,6 @@ def multi_start(minimizer_fn=minimize):
             low, high = zip(*bounds)
             dims = len(bounds)
 
-        results = new_minimizer(fn, bounds, num_restarts-1, random_state,
-                                *args, **kwargs)
         x0 = random_state.uniform(low=low, high=high, size=(dims,))
         result = minimizer_fn(fn, x0=x0, bounds=bounds, *args, **kwargs)
         results.append(result)
