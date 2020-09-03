@@ -9,9 +9,8 @@ import logging
 import hpbandster.core.nameserver as hpns
 
 from pathlib import Path
-from functools import partial
 
-from bore.engine import BORE
+from bore.plugins.hpbandster import BORE
 from bore.benchmarks import (Hartmann3DWorker, Hartmann6DWorker,
                              BoreholeWorker, FCNetWorker, BraninWorker)
 from bore.utils import dataframe_from_result
@@ -77,8 +76,6 @@ def main(benchmark_name, dataset_name, method_name, num_runs, num_iterations,
          num_restarts, batch_size, num_steps_per_iter, optimizer, num_layers,
          num_units, activation, normalize, method, max_iter, ftol, input_dir,
          output_dir):
-
-    print(f"Normalized {normalize}!!!!")
 
     Worker, worker_kws = get_worker(benchmark_name, dataset_name=dataset_name,
                                     input_dir=input_dir)
