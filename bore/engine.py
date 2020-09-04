@@ -7,6 +7,38 @@ from .optimizers import multi_start
 # TODO(LT): Extract framework agnostic core enginer code from
 # `plugins.hpbandster` and place it here.
 
+
+class Ledger:
+
+    def __init__(self):
+        self.features = []
+        self.targets = []
+
+    def size(self):
+        return len(self.targets)
+
+    def append(self, x, y):
+        self.features.append(x)
+        self.targets.append(y)
+
+    def load_feature_matrix(self):
+        return np.vstack(self.features)
+
+    def load_target_vector(self):
+        return np.hstack(self.targets)
+
+    def load_regression_data(self):
+        X = self.load_feature_matrix()
+        y = self.load_target_vector()
+        return X, y
+
+    def load_classification_data(self, gamma):
+        X, y = self.load_regression_data()
+        tau = np.quantile(y, q=gamma)
+        z = np.less(y, tau)
+        return X, z
+
+
 def is_duplicate(x, xs, rtol=1e-5, atol=1e-8):
     # Clever ways of doing this would involve data structs. like KD-trees
     # or locality sensitive hashing (LSH), but these are premature

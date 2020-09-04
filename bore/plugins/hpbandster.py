@@ -3,7 +3,7 @@ import tensorflow as tf
 
 from tensorflow.keras.losses import BinaryCrossentropy
 
-from ..engine import minimize_multi_start, is_duplicate
+from ..engine import Ledger, minimize_multi_start, is_duplicate
 from ..types import DenseConfigurationSpace, DenseConfiguration
 from ..models import DenseSequential
 from ..decorators import unbatch, value_and_gradient, numpy_io
@@ -37,8 +37,8 @@ class BORE(HyperBand):
         super(HyperBand, self).__init__(config_generator=cg, **kwargs)
 
         # (LT): the design of HpBandSter framework requires us to copy-paste
-        # the following boilerplate code. Cannot really just subclass and
-        # specify an alternative Configuration Generator.
+        # the following boilerplate code (cannot really just subclass and
+        # specify an alternative Configuration Generator).
 
         # Hyperband related stuff
         self.eta = eta
@@ -85,7 +85,12 @@ class RatioEstimator(base_config_generator):
 
         self.logit = self._build_compile_network(num_layers, num_units,
                                                  activation, optimizer)
-        self.loss = self._build_loss(self.logit, normalize=normalize)
+
+        if normalize:
+            final = tf.sigmoid
+        else:
+            final = tf.identity
+        self.loss = self._build_loss(activation=final)
 
         self.gamma = gamma
         self.num_random_init = num_random_init
@@ -99,8 +104,7 @@ class RatioEstimator(base_config_generator):
         self.batch_size = batch_size
         self.num_steps_per_iter = num_steps_per_iter
 
-        self.config_arrs = []
-        self.losses = []
+        self.ledger = Ledger()
 
         self.seed = seed
         self.random_state = np.random.RandomState(seed)
@@ -113,21 +117,6 @@ class RatioEstimator(base_config_generator):
         config = DenseConfiguration.from_array(self.config_space,
                                                array_dense=array)
         return config.get_dictionary()
-
-    def _get_dataset_size(self):
-        return len(self.config_arrs)
-
-    def _load_data(self):
-        X = np.vstack(self.config_arrs)
-        y = np.hstack(self.losses)
-        return X, y
-
-    def _load_labels(self, y):
-        # TODO(LT): we can use clever data structures like heaps to make this
-        #   labelling constant-time, but this is probably a premature
-        #   optimization at this time...
-        tau = np.quantile(y, q=self.gamma)
-        return np.less(y, tau)
 
     def _get_steps_per_epoch(self, dataset_size):
         steps_per_epoch = int(np.ceil(np.true_divide(dataset_size,
@@ -145,28 +134,24 @@ class RatioEstimator(base_config_generator):
                         loss=BinaryCrossentropy(from_logits=True))
         return network
 
-    @staticmethod
-    def _build_loss(logit, normalize=True):
-
-        if normalize:
-            activation = tf.sigmoid
-        else:
-            activation = tf.identity
-
+    def _build_loss(self, activation):
+        """
+        Returns the loss, i.e. the (negative) acquisition function to be
+        minimized through the `scipy.optimize` interface.
+        """
         @numpy_io
         @value_and_gradient
         @unbatch
         def loss(x):
-            return - activation(logit(x))
+            return - activation(self.logit(x))
 
         return loss
 
     def _update_model(self):
 
-        X, y = self._load_data()
-        z = self._load_labels(y)
+        X, z = self.ledger.load_classification_data(self.gamma)
 
-        dataset_size = self._get_dataset_size()
+        dataset_size = self.ledger.size()
         steps_per_epoch = self._get_steps_per_epoch(dataset_size)
         num_epochs = self.num_steps_per_iter // steps_per_epoch
 
@@ -196,15 +181,14 @@ class RatioEstimator(base_config_generator):
 
         res_best = None
         for i, res in enumerate(results):
-            # TODO(LT): This currently assumes `normalize=False`
             self.logger.debug(f"[Maximum {i+1:02d}/{self.num_restarts:02d}: "
-                              f"logit={-res.fun:.3f}] success: {res.success}, "
+                              f"value={-res.fun:.3f}] success: {res.success}, "
                               f"iterations: {res.nit:02d}, status: {res.status}"
                               f" ({res.message})")
 
             # TODO(LT): Create Enum type for these status codes
             if (res.status == 0 or res.status == 9) and \
-                    not is_duplicate(res.x, self.config_arrs):
+                    not is_duplicate(res.x, self.ledger.features):
                 # if (res_best is not None) *implies* (res.fun < res_best.fun)
                 # (i.e. material implication) is logically equivalent to below
                 if res_best is None or res.fun < res_best.fun:
@@ -214,7 +198,7 @@ class RatioEstimator(base_config_generator):
 
     def get_config(self, budget):
 
-        dataset_size = self._get_dataset_size()
+        dataset_size = self.ledger.size()
 
         config_random = self.config_space.sample_configuration()
         config_random_dict = config_random.get_dictionary()
@@ -244,11 +228,7 @@ class RatioEstimator(base_config_generator):
                              " Returning random candidate...")
             return (config_random_dict, {})
 
-        # TODO(LT): This currently assumes `normalize=False`
-        self.logger.info(f"[Glob. maximum: logit={-opt.fun:.3f}, "
-                         f"prob={tf.sigmoid(-opt.fun):.3f}, "
-                         f"rel. ratio={tf.sigmoid(-opt.fun)/self.gamma:.3f}] "
-                         f"x={opt.x}")
+        self.logger.info(f"[Glob. maximum: value={-opt.fun:.3f}, x={opt.x}")
 
         config_opt_arr = opt.x
         config_opt_dict = self._dict_from_array(config_opt_arr)
@@ -267,5 +247,4 @@ class RatioEstimator(base_config_generator):
 
         loss = job.result["loss"]
 
-        self.config_arrs.append(config_arr)
-        self.losses.append(loss)
+        self.ledger.append(x=config_arr, y=loss)

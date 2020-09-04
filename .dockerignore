@@ -2,8 +2,7 @@ scratch/*
 scripts/*
 examples/*
 datasets/*
-checkpoints/*
-logs/*
+results/*
 
 **/.git
 
