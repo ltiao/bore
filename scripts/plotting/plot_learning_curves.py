@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from pathlib import Path
-from utils import GOLDEN_RATIO, WIDTH, size, pt_to_in
+from utils import GOLDEN_RATIO, WIDTH, size
 
 
 @click.command()
@@ -27,7 +27,7 @@ from utils import GOLDEN_RATIO, WIDTH, size, pt_to_in
 def main(name, seed, context, style, palette, width, aspect, extension,
          input_dir, output_dir):
 
-    figsize = size(width, aspect)
+    figsize = width_in, height_in = size(width, aspect)
     height = width / aspect
     suffix = f"{width:.0f}x{height:.0f}"
 
@@ -111,14 +111,14 @@ def main(name, seed, context, style, palette, width, aspect, extension,
     test = data_pivot[columns]  # .applymap(np.log10)
     test.columns = [fr"$f(x, {{{t+1:d}}})$" for t in t_grid]
 
-    g = sns.PairGrid(test, corner=True, height=pt_to_in(height)/(T+1), aspect=aspect)
+    g = sns.PairGrid(test, corner=True, height=height_in/(T+1), aspect=aspect)
     g = g.map_lower(plt.plot, alpha=0.7)
 
     for ext in extension:
         g.savefig(output_path.joinpath(f"grid_line_{context}_{suffix}.{ext}"))
 
     g = sns.PairGrid(test.reset_index(), hue="log lr", palette="viridis",
-                     corner=True, height=pt_to_in(height)/(T+1), aspect=aspect)
+                     corner=True, height=height_in/(T+1), aspect=aspect)
     g = g.map_lower(plt.scatter, facecolor="none", alpha=0.8)
 
     for ext in extension:

@@ -1,3 +1,4 @@
+import pandas as pd
 import numpy as np
 
 from scipy.optimize import minimize
@@ -13,13 +14,16 @@ class Ledger:
     def __init__(self):
         self.features = []
         self.targets = []
+        self.budgets = []
 
     def size(self):
         return len(self.targets)
 
-    def append(self, x, y):
+    def append(self, x, y, b=None):
         self.features.append(x)
         self.targets.append(y)
+        if b is not None:
+            self.budgets.append(b)
 
     def load_feature_matrix(self):
         return np.vstack(self.features)
@@ -37,6 +41,11 @@ class Ledger:
         tau = np.quantile(y, q=gamma)
         z = np.less(y, tau)
         return X, z
+
+    def to_dataframe(self):
+        frame = pd.DataFrame(data=self.features).assign(budget=self.budgets,
+                                                        loss=self.targets)
+        return frame
 
 
 def is_duplicate(x, xs, rtol=1e-5, atol=1e-8):
