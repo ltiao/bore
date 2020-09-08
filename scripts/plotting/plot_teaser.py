@@ -37,14 +37,6 @@ kernel_cls = kernels.ExponentiatedQuadratic
 
 OUTPUT_DIR = "logs/figures/"
 
-NUM_INIT_RANDOM = 15
-NUM_INDEX_POINTS = 512
-PI = 1/3
-BANDWIDTH = 0.1
-
-TEST_SIZE = 0.2
-SEED = 8888
-
 
 def make_test_metric(X_train, y_train, X_test, y_test):
 
@@ -60,12 +52,12 @@ def make_test_metric(X_train, y_train, X_test, y_test):
     return test_metric
 
 
-def latent(gamma):
+def latent(x):
     """
     Forrester's.
     """
     # return (6.0*gamma-2.0)**2 * np.sin(12.0 * gamma - 4.0)
-    return np.sin(3.0*gamma) + gamma**2 - 0.7*gamma
+    return np.sin(3.0*x) + x**2 - 0.7*x
 
 
 def mixture(p, q, pi=0.):
@@ -88,9 +80,19 @@ def relative(ratio_inverse, gamma):
               help="Output directory.")
 def main(name, width, aspect, extension, output_dir):
 
-    # preamble
-    random_state = np.random.RandomState(SEED)
+    num_features = 1
+    num_init_random = 27
+    noise_variance = 0.2
+    gamma = 1/3
+    bandwidth = 0.25
 
+    num_index_points = 512
+    x_min, x_max = -1.0, 2.0
+
+    seed = 8888  # set random seed for reproducibility
+    random_state = np.random.RandomState(seed)
+
+    # preamble
     figsize = size(width, aspect)
     suffix = f"{width:.0f}x{width/aspect:.0f}"
 
@@ -110,31 +112,14 @@ def main(name, width, aspect, extension, output_dir):
     output_path.mkdir(parents=True, exist_ok=True)
     # /preamble
 
-    # dataset = load_boston()
-    # X_train, X_test, y_train, y_test = train_test_split(dataset.data,
-    #                                                     dataset.target,
-    #                                                     test_size=TEST_SIZE,
-    #                                                     random_state=random_state)
-    # test_metric = make_test_metric(X_train, y_train, X_test, y_test)
-    # %%
-
-    # log_gamma_min, log_gamma_max = -8.0, 0.0
-
-    # # equivalent to:
-    # # gamma = np.logspace(log_gamma_min, log_gamma_max, NUM_INDEX_POINTS)
-
-    # log_gamma = np.linspace(log_gamma_min, log_gamma_max, NUM_INDEX_POINTS)
-    # gamma = 10.0**log_gamma
-
-    gamma = np.linspace(-1.0, 2.0, NUM_INDEX_POINTS)
-    y = latent(gamma)
+    X = np.linspace(x_min, x_max, num_index_points).reshape(-1, num_features)
+    y = latent(X)
     # %%
 
     fig, ax = plt.subplots()
 
-    ax.plot(gamma, y)
+    ax.plot(X, y, c="tab:gray")
 
-    # ax.set_xscale("log")
     ax.set_xlabel(r'$x$')
     ax.set_ylabel(r"$y$ (test mse)")
 
@@ -145,44 +130,36 @@ def main(name, width, aspect, extension, output_dir):
     plt.show()
     # %%
 
-    # log_gamma_samples = random_state.uniform(low=log_gamma_min,
-    #                                          high=log_gamma_max,
-    #                                          size=NUM_INIT_RANDOM)
-    # gamma_samples = 10.0**log_gamma_samples
-
     load_observations = make_regression_dataset(latent)
-    gamma_samples, y_samples = load_observations(num_samples=NUM_INIT_RANDOM,
-                                                 num_features=1,
-                                                 noise_variance=0.2,
-                                                 x_min=-1.0, x_max=2.0,
-                                                 random_state=random_state)
+    X_samples, y_samples = load_observations(num_samples=num_init_random,
+                                             num_features=num_features,
+                                             noise_variance=noise_variance,
+                                             x_min=x_min, x_max=x_max,
+                                             random_state=random_state)
     # %%
+    tau = np.quantile(y_samples, q=gamma)
+    mask_l = np.less(y_samples, tau)
+    mask_g = ~mask_l
 
-    y_threshold = np.quantile(y_samples, q=PI)
-    mask_lesser = (y_samples <= y_threshold)
-    mask_greater = ~mask_lesser
+    X_samples_l = X_samples[mask_l]
+    X_samples_g = X_samples[mask_g]
 
-    gamma_samples_lesser = gamma_samples[mask_lesser]
-    gamma_samples_greater = gamma_samples[mask_greater]
+    y_samples_l = y_samples[mask_l]
+    y_samples_g = y_samples[mask_g]
 
-    # log_gamma_samples_lesser = log_gamma_samples[mask_lesser]
-    # log_gamma_samples_greater = log_gamma_samples[mask_greater]
-
-    y_samples_lesser = y_samples[mask_lesser]
-    y_samples_greater = y_samples[mask_greater]
     # %%
 
     fig, ax = plt.subplots()
 
-    ax.plot(gamma, y)
+    ax.plot(X, y)
 
     # ax.scatter(log_gamma_samples, y_samples, c=mask_lesser,
     #            alpha=0.7, cmap="coolwarm")
-    ax.scatter(gamma_samples_lesser, y_samples_lesser, alpha=0.8)
-    ax.scatter(gamma_samples_greater, y_samples_greater, alpha=0.8)
+    ax.scatter(X_samples_l, y_samples_l, alpha=0.8)
+    ax.scatter(X_samples_g, y_samples_g, alpha=0.8)
 
-    ax.axhline(y_threshold, xmin=0, xmax=1.0,
-               color='k', linewidth=1.0, linestyle='dashed')
+    ax.axhline(tau, xmin=0., xmax=1.,
+               color='k', linewidth=1., linestyle='dashed')
 
     # ax.set_xscale("log")
     ax.set_xlabel(r'$x$')
@@ -195,18 +172,14 @@ def main(name, width, aspect, extension, output_dir):
     plt.show()
     # %%
 
-    y_samples_sorted = np.sort(y_samples)
-    y_samples_quantile = np.arange(NUM_INIT_RANDOM) / NUM_INIT_RANDOM
-    # %%
-
     fig, ax = plt.subplots()
 
-    ax.plot(y_samples_sorted, y_samples_quantile)
+    sns.ecdfplot(x=y_samples, ax=ax)
 
-    ax.vlines(y_threshold, ymin=0, ymax=PI,
-              colors='k', linestyles='dashed', linewidth=1.0)
-    ax.hlines(PI, xmin=y_samples_sorted[0], xmax=y_threshold,
-              colors='k', linestyles='dashed', linewidth=1.0)
+    ax.axvline(tau, ymin=0., ymax=gamma,
+               color="black", linestyle='dashed', linewidth=1.0)
+    ax.hlines(gamma, xmin=y_samples.min(), xmax=tau,
+              colors="black", linestyles='dashed', linewidth=1.0)
 
     ax.set_xlabel(r'$y$')
     ax.set_ylabel(r'$\Phi(y)$')
@@ -220,12 +193,14 @@ def main(name, width, aspect, extension, output_dir):
 
     fig, ax = plt.subplots()
 
-    sns.distplot(gamma_samples_lesser, hist=False, rug=True,
-                 label=r'$\ell(x)$', kde_kws=dict(shade=True, bw=BANDWIDTH), ax=ax)
-    sns.distplot(gamma_samples_greater, hist=False, rug=True,
-                 label=r'$g(x)$', kde_kws=dict(shade=True, bw=BANDWIDTH), ax=ax)
+    sns.kdeplot(x=X_samples_l.squeeze(), fill=True, bw_method=bandwidth,
+                label=r'$\ell(x)$', ax=ax)
+    sns.kdeplot(x=X_samples_g.squeeze(), fill=True, bw_method=bandwidth,
+                label=r'$g(x)$', ax=ax)
+    sns.rugplot(x=X_samples_l.squeeze(), ax=ax)
+    sns.rugplot(x=X_samples_g.squeeze(), ax=ax)
 
-    ax.set_xlabel(r'$\log_{10}{x}$')
+    ax.set_xlabel(r'$x$')
     ax.set_ylabel("density")
 
     ax.legend()
@@ -237,25 +212,24 @@ def main(name, width, aspect, extension, output_dir):
     plt.show()
     # %%
 
-    kde_lesser = sm.nonparametric.KDEUnivariate(gamma_samples_lesser)
+    kde_l = sm.nonparametric.KDEUnivariate(X_samples_l.squeeze())
     # kde_lesser.fit(bw=BANDWIDTH)
-    kde_lesser.fit(bw="normal_reference")
+    kde_l.fit(bw="normal_reference")
 
-    kde_greater = sm.nonparametric.KDEUnivariate(gamma_samples_greater)
+    kde_g = sm.nonparametric.KDEUnivariate(X_samples_g.squeeze())
     # kde_greater.fit(bw=BANDWIDTH)
-    kde_greater.fit(bw="normal_reference")
+    kde_g.fit(bw="normal_reference")
 
     # %%
 
     fig, ax = plt.subplots()
 
-    ax.plot(gamma, kde_lesser.evaluate(gamma),
-            label=fr"$\ell(x)$ -- bw {kde_lesser.bw:.2f}")
-    ax.plot(gamma, kde_greater.evaluate(gamma),
-            label=fr"$g(x)$ -- bw {kde_greater.bw:.2f}")
-
-    sns.rugplot(gamma_samples_lesser, c='tab:blue', ax=ax)
-    sns.rugplot(gamma_samples_greater, c='tab:orange', ax=ax)
+    ax.plot(X, kde_l.evaluate(X.squeeze()),
+            label=fr"$\ell(x)$ -- bw {kde_l.bw:.2f}")
+    ax.plot(X, kde_g.evaluate(X.squeeze()),
+            label=fr"$g(x)$ -- bw {kde_g.bw:.2f}")
+    sns.rugplot(x=X_samples_l.squeeze(), ax=ax)
+    sns.rugplot(x=X_samples_g.squeeze(), ax=ax)
 
     # ax.set_xscale("log")
     ax.set_xlabel(r'$x$')
@@ -272,17 +246,16 @@ def main(name, width, aspect, extension, output_dir):
 
     fig, ax = plt.subplots()
 
-    ax.plot(gamma, kde_lesser.evaluate(gamma), linestyle="dashed",
-            alpha=0.4, label=fr"$\ell(x)$ -- bw {kde_lesser.bw:.2f}")
-    ax.plot(gamma, kde_greater.evaluate(gamma), linestyle="dashed",
-            alpha=0.4, label=fr"$g(x)$ -- bw {kde_greater.bw:.2f}")
-    ax.plot(gamma, kde_lesser.evaluate(gamma) / kde_greater.evaluate(gamma),
+    ax.plot(X, kde_l.evaluate(X.squeeze()), linestyle="dashed",
+            alpha=0.4, label=fr"$\ell(x)$ -- bw {kde_l.bw:.2f}")
+    ax.plot(X, kde_g.evaluate(X.squeeze()), linestyle="dashed",
+            alpha=0.4, label=fr"$g(x)$ -- bw {kde_g.bw:.2f}")
+    ax.plot(X, kde_l.evaluate(X.squeeze()) / kde_g.evaluate(X.squeeze()),
             label=r'$\ell(x) / g(x)$')
-    ax.plot(gamma, relative(kde_greater.evaluate(gamma) / kde_lesser.evaluate(gamma), PI),
+    ax.plot(X, relative(kde_g.evaluate(X.squeeze()) / kde_l.evaluate(X.squeeze()), gamma),
             label=r'$r_{\gamma}(x)$')
-
-    sns.rugplot(gamma_samples_lesser, c='tab:blue', ax=ax)
-    sns.rugplot(gamma_samples_greater, c='tab:orange', ax=ax)
+    sns.rugplot(x=X_samples_l.squeeze(), ax=ax)
+    sns.rugplot(x=X_samples_g.squeeze(), ax=ax)
 
     # ax.set_xscale("log")
     ax.set_xlabel(r'$x$')
@@ -301,30 +274,30 @@ def main(name, width, aspect, extension, output_dir):
 
     divider = make_axes_locatable(ax_main)
 
-    ax_main.plot(gamma, y, color="tab:gray", label="latent function")
-    ax_main.scatter(gamma_samples_lesser, y_samples[mask_lesser],
+    ax_main.plot(X, y, color="tab:gray", label="latent function")
+    ax_main.scatter(X_samples_l, y_samples[mask_l],
                     alpha=0.8, label=r'$y < \tau$')
-    ax_main.scatter(gamma_samples_greater, y_samples[mask_greater],
+    ax_main.scatter(X_samples_g, y_samples[mask_g],
                     alpha=0.8, label=r'$y \geq \tau$')
-    ax_main.axhline(y_threshold, xmin=0, xmax=1.0,
+    ax_main.axhline(tau, xmin=0, xmax=1.0,
                     color='gray', linewidth=1.0, linestyle='dashed')
-    ax_main.annotate(rf"$\tau={{{y_threshold:.2f}}}$", xy=(gamma[0], y_threshold),
-                     xycoords='data', xytext=(-5.0, -8.0), textcoords='offset points',
+    ax_main.annotate(rf"$\tau={{{tau:.2f}}}$", xy=(X[-1], tau),
+                     xycoords='data', xytext=(-25.0, -8.0), textcoords='offset points',
                      fontsize="x-small", arrowprops=dict(facecolor='black', arrowstyle='-'))
 
     # ax_main.set_xscale("log")
     ax_main.set_xlabel(r"$x$")
     ax_main.set_ylabel(r"$y$")
 
-    ax_main.legend()
+    ax_main.legend(loc="upper left")
 
     ax_x = divider.append_axes("top", size=0.9, pad=0.1, sharex=ax_main)
 
-    ax_x.plot(gamma, kde_lesser.evaluate(gamma), label=r"$\ell(x)$")
-    ax_x.plot(gamma, kde_greater.evaluate(gamma), label=r"$g(x)$")
+    ax_x.plot(X, kde_l.evaluate(X.squeeze()), label=r"$\ell(x)$")
+    ax_x.plot(X, kde_g.evaluate(X.squeeze()), label=r"$g(x)$")
 
-    sns.rugplot(gamma_samples_lesser, c='tab:blue', ax=ax_x)
-    sns.rugplot(gamma_samples_greater, c='tab:orange', ax=ax_x)
+    sns.rugplot(x=X_samples_l.squeeze(), ax=ax_x)
+    sns.rugplot(x=X_samples_g.squeeze(), ax=ax_x)
 
     ax_x.set_ylabel("density")
     ax_x.xaxis.set_tick_params(labelbottom=False)
@@ -333,12 +306,13 @@ def main(name, width, aspect, extension, output_dir):
 
     ax_y = divider.append_axes("right", size=0.9, pad=0.1, sharey=ax_main)
 
-    ax_y.plot(y_samples_quantile, y_samples_sorted)
-    ax_y.hlines(y_threshold, xmin=0, xmax=PI,
+    sns.ecdfplot(y=y_samples, ax=ax_y)
+
+    ax_y.hlines(tau, xmin=0, xmax=gamma,
                 colors='gray', linestyles='dashed', linewidth=1.0)
-    ax_y.vlines(PI, ymin=y_samples_sorted[0], ymax=y_threshold,
+    ax_y.vlines(gamma, ymin=y_samples.min(), ymax=tau,
                 colors='gray', linestyles='dashed', linewidth=1.0)
-    ax_y.annotate(rf"$\gamma={{{PI:.2f}}}$", xy=(PI, y_samples_sorted[0]),
+    ax_y.annotate(rf"$\gamma={{{gamma:.2f}}}$", xy=(gamma, y_samples.min()),
                   xycoords='data', xytext=(5.0, 0.0), textcoords='offset points',
                   fontsize="x-small", arrowprops=dict(facecolor='black', arrowstyle='-'))
 
@@ -351,22 +325,22 @@ def main(name, width, aspect, extension, output_dir):
     plt.show()
     # %%
 
-    kde_lesser = KernelDensity(kernel='gaussian', bandwidth=BANDWIDTH) \
-        .fit(gamma_samples_lesser.reshape(-1, 1))
-    log_density_lesser = kde_lesser.score_samples(gamma.reshape(-1, 1))
+    kde_l = KernelDensity(kernel='gaussian', bandwidth=bandwidth) \
+        .fit(X_samples_l)
+    log_density_l = kde_l.score_samples(X)
 
-    kde_greater = KernelDensity(kernel='gaussian', bandwidth=BANDWIDTH) \
-        .fit(gamma_samples_greater.reshape(-1, 1))
-    log_density_greater = kde_greater.score_samples(gamma.reshape(-1, 1))
+    kde_g = KernelDensity(kernel='gaussian', bandwidth=bandwidth) \
+        .fit(X_samples_g)
+    log_density_g = kde_g.score_samples(X)
     # %%
 
     fig, ax = plt.subplots()
 
-    ax.plot(gamma, np.exp(log_density_lesser), label=r'$\ell(x)$')
-    ax.plot(gamma, np.exp(log_density_greater), label=r'$g(x)$')
+    ax.plot(X, np.exp(log_density_l), label=r'$\ell(x)$')
+    ax.plot(X, np.exp(log_density_g), label=r'$g(x)$')
 
-    sns.rugplot(gamma_samples_lesser, c='tab:blue', ax=ax)
-    sns.rugplot(gamma_samples_greater, c='tab:orange', ax=ax)
+    sns.rugplot(x=X_samples_l.squeeze(), ax=ax)
+    sns.rugplot(x=X_samples_g.squeeze(), ax=ax)
 
     # ax.set_xscale("log")
     ax.set_xlabel(r'$x$')
@@ -383,15 +357,15 @@ def main(name, width, aspect, extension, output_dir):
 
     fig, ax = plt.subplots()
 
-    ax.plot(gamma, np.exp(log_density_lesser), linestyle="dashed",
-            alpha=0.4, label=fr"$\ell(x)$ -- bw {BANDWIDTH:.2f}")
-    ax.plot(gamma, np.exp(log_density_greater), linestyle="dashed",
-            alpha=0.4, label=fr"$g(x)$ -- bw {BANDWIDTH:.2f}")
-    ax.plot(gamma, np.exp(log_density_lesser - log_density_greater),
+    ax.plot(X, np.exp(log_density_l), linestyle="dashed",
+            alpha=0.4, label=fr"$\ell(x)$ -- bw {bandwidth:.2f}")
+    ax.plot(X, np.exp(log_density_g), linestyle="dashed",
+            alpha=0.4, label=fr"$g(x)$ -- bw {bandwidth:.2f}")
+    ax.plot(X, np.exp(log_density_l - log_density_g),
             label=r'$\ell(x) / g(x)$')
 
-    sns.rugplot(gamma_samples_lesser, c='tab:blue', ax=ax)
-    sns.rugplot(gamma_samples_greater, c='tab:orange', ax=ax)
+    sns.rugplot(x=X_samples_l.squeeze(), ax=ax)
+    sns.rugplot(x=X_samples_g.squeeze(), ax=ax)
 
     # ax.set_xscale("log")
     ax.set_xlabel(r'$x$')
@@ -416,7 +390,7 @@ def main(name, width, aspect, extension, output_dir):
 
     kernel = kernel_cls(amplitude=amplitude, length_scale=length_scale)
     gp = tfd.GaussianProcess(
-        kernel=kernel, index_points=gamma_samples.reshape(-1, 1),
+        kernel=kernel, index_points=X_samples,
         observation_noise_variance=observation_noise_variance)
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.05, beta_1=0.5,
                                          beta_2=0.99)
@@ -432,20 +406,20 @@ def main(name, width, aspect, extension, output_dir):
         optimizer.apply_gradients(zip(gradients, gp.trainable_variables))
 
     gprm = tfd.GaussianProcessRegressionModel(
-        kernel=kernel, index_points=gamma.reshape(-1, 1),
-        observation_index_points=gamma_samples.reshape(-1, 1), observations=y_samples,
+        kernel=kernel, index_points=X,
+        observation_index_points=X_samples, observations=y_samples,
         observation_noise_variance=observation_noise_variance, jitter=1e-6)
 
     fig, ax = plt.subplots()
 
-    ax.plot(gamma, gprm.mean(), label="posterior predictive mean")
-    fill_between_stddev(gamma,
+    ax.plot(X, gprm.mean(), label="posterior predictive mean")
+    fill_between_stddev(X.squeeze(),
                         gprm.mean().numpy().squeeze(),
                         gprm.stddev().numpy().squeeze(), alpha=0.1,
                         label="posterior predictive std dev", ax=ax)
 
-    ax.plot(gamma, y, label="true", color="tab:gray")
-    ax.scatter(gamma_samples, y_samples, alpha=0.8)
+    ax.plot(X, y, label="true", color="tab:gray")
+    ax.scatter(X_samples, y_samples, alpha=0.8)
 
     ax.legend()
 
@@ -460,12 +434,12 @@ def main(name, width, aspect, extension, output_dir):
 
     gprm_marginals = tfd.Normal(loc=gprm.mean(), scale=gprm.stddev())
 
-    ei = np.maximum(y_threshold - gprm.mean(), 0.) * gprm_marginals.cdf(y_threshold)
-    ei += gprm.stddev() * gprm_marginals.prob(y_threshold)
+    ei = np.maximum(tau - gprm.mean(), 0.) * gprm_marginals.cdf(tau)
+    ei += gprm.stddev() * gprm_marginals.prob(tau)
 
     fig, ax = plt.subplots()
 
-    ax.plot(gamma, ei)
+    ax.plot(X, ei)
 
     for ext in extension:
         fig.savefig(output_path.joinpath(f"ei_{suffix}.{ext}"),
@@ -473,14 +447,14 @@ def main(name, width, aspect, extension, output_dir):
 
     plt.show()
 
-    pis = np.arange(0., 0.5, 0.15)
-    y_quantiles = np.quantile(y_samples, q=pis)
+    gammas = np.arange(0., 0.5, 0.15)
+    y_quantiles = np.quantile(y_samples, q=gammas)
     eis = (y_quantiles.reshape(-1, 1) - gprm.mean()) * gprm_marginals.cdf(y_quantiles.reshape(-1, 1))
     eis += gprm.stddev() * gprm_marginals.prob(y_quantiles.reshape(-1, 1))
 
     import pandas as pd
 
-    data = pd.DataFrame(data=eis.numpy(), index=pis, columns=gamma)
+    data = pd.DataFrame(data=eis.numpy(), index=gammas, columns=X.squeeze())
     data.index.name = r"$\gamma$"
     data.columns.name = r"$x$"
     s = data.stack()
