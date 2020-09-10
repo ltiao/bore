@@ -1,5 +1,6 @@
 import sys
 import click
+import json
 
 import pandas as pd
 
@@ -8,9 +9,9 @@ import seaborn as sns
 
 # from bore.utils import load_runs
 from pathlib import Path
-from utils import GOLDEN_RATIO, WIDTH, size
+from utils import (GOLDEN_RATIO, WIDTH, size, load_frame, extract_series,
+                   merge_stack_series)
 
-import ConfigSpace as CS
 from tabular_benchmarks import (FCNetProteinStructureBenchmark,
                                 FCNetSliceLocalizationBenchmark,
                                 FCNetNavalPropulsionBenchmark,
@@ -19,76 +20,7 @@ from tabular_benchmarks import (FCNetProteinStructureBenchmark,
 OUTPUT_DIR = "figures/"
 
 
-def extract_series(frame, index="elapsed", column="regret_best"):
-
-    frame_new = frame.set_index(index)
-    series = frame_new[column]
-
-    # (0) save last timestamp and value
-#     series_final = series.tail(n=1)
-
-    # (1) de-duplicate the values (significantly speed-up
-    # subsequent processing)
-    # (2) de-duplicate the indices (it is entirely possible
-    # for some epoch of two different tasks to complete
-    # at the *exact* same time; we take the one with the
-    # smaller value)
-    # (3) add back last timestamp and value which can get
-    # lost in step (1)
-    series_new = series.drop_duplicates(keep="first") \
-                       .groupby(level=index).min()
-#                        .append(series_final)
-    return series_new
-
-
-def load_runs(base_dir, runs=[], error_min=None):
-
-    base_path = Path(base_dir)
-
-    series = {}
-    for run in range(runs):
-
-        path = base_path.joinpath(f"{run:03d}.csv")
-        frame = pd.read_csv(path, index_col=0).assign(run=run)
-
-        best = frame.error.cummin()
-        elapsed = frame.cost.cumsum()
-        frame = frame.assign(best=best, elapsed=elapsed)
-
-        if error_min is not None:
-            regret = (error_min - frame.error).abs()
-            regret_best = regret.cummin()
-            frame = frame.assign(regret=regret, regret_best=regret_best)
-
-        series[run] = extract_series(frame, index="elapsed", column="regret_best")
-
-    return series  # pd.concat(frames, axis="index", ignore_index=True, sort=True)
-
-
-def merge_stack_runs(series_dict, run_key="run", y_key="regret_best"):
-
-    frame = pd.DataFrame(series_dict)
-
-    # fill missing values by propagating previous observation
-    frame.ffill(axis="index", inplace=True)
-
-    # NaNs can only remain if there are no previous observations
-    # i.e. these occur at the beginning rows.
-    # drop rows until all runs have recorded observations.
-    frame.dropna(how="any", axis="index", inplace=True)
-
-    frame.columns.name = run_key
-    stacked = frame.stack(level=run_key)
-
-    stacked.name = y_key
-    stacked_frame = stacked.reset_index()
-
-    return stacked_frame
-
-
 def get_error_mins(benchmark_name, data_dir=None, budget=100):
-
-    print(benchmark_name)
 
     if not benchmark_name.startswith("fcnet"):
 
@@ -102,53 +34,6 @@ def get_error_mins(benchmark_name, data_dir=None, budget=100):
 
     assert data_dir is not None, "data directory must be specified"
 
-    x_mins = {
-        "fcnet_protein": {
-            "init_lr": 5 * 1e-4,
-            "batch_size": 8,
-            "lr_schedule": "cosine",
-            "activation_fn_1": "relu",
-            "activation_fn_2": "relu",
-            "n_units_1": 512,
-            "n_units_2": 512,
-            "dropout_1": 0.0,
-            "dropout_2": 0.3
-        },
-        "fcnet_slice": {
-            "init_lr": 5 * 1e-4,
-            "batch_size": 32,
-            "lr_schedule": "cosine",
-            "activation_fn_1": "relu",
-            "activation_fn_2": "tanh",
-            "n_units_1": 512,
-            "n_units_2": 512,
-            "dropout_1": 0.0,
-            "dropout_2": 0.0
-        },
-        "fcnet_naval": {
-            "init_lr": 5 * 1e-4,
-            "batch_size": 8,
-            "lr_schedule": "cosine",
-            "activation_fn_1": "tanh",
-            "activation_fn_2": "relu",
-            "n_units_1": 128,
-            "n_units_2": 512,
-            "dropout_1": 0.0,
-            "dropout_2": 0.0
-        },
-        "fcnet_parkinsons": {
-            "init_lr": 5 * 1e-4,
-            "batch_size": 8,
-            "lr_schedule": "cosine",
-            "activation_fn_1": "tanh",
-            "activation_fn_2": "relu",
-            "n_units_1": 128,
-            "n_units_2": 512,
-            "dropout_1": 0.0,
-            "dropout_2": 0.0
-        }
-    }
-
     if benchmark_name.endswith("protein"):
         benchmark = FCNetProteinStructureBenchmark(data_dir=data_dir)
     elif benchmark_name.endswith("slice"):
@@ -160,19 +45,34 @@ def get_error_mins(benchmark_name, data_dir=None, budget=100):
     else:
         raise ValueError("dataset name not recognized!")
 
-    cs = benchmark.get_configuration_space()
-    c = CS.Configuration(cs, values=x_mins[benchmark_name])
+    path = Path(data_dir).joinpath("global_optimum.json")
+    if path.exists():
 
-    y, runtime = benchmark.objective_function(c, budget=budget)
-    # y_test, runtime_test = benchmark.objective_function_test(c)
+        with path.open() as f:
+            d = json.load(f)
 
-    return y
+        config_dict, val_error_min, test_error_min = d["config_dict"], d["val_error_min"], d["test_error_min"]
+
+    else:
+
+        config_dict, val_error_min, \
+            test_error_min = benchmark.get_best_configuration()
+
+        d = dict(config_dict=config_dict,
+                 val_error_min=float(val_error_min),
+                 test_error_min=float(test_error_min))
+
+        with path.open('w') as f:
+            json.dump(d, f)
+
+    return float(val_error_min)
 
 
 @click.command()
 @click.argument("benchmark_name")
 @click.argument("input_dir", default="results",
                 type=click.Path(file_okay=False, dir_okay=True))
+@click.option('--num-runs', '-n', default=20)
 @click.option('--methods', '-m', multiple=True)
 @click.option('--ci')
 @click.option('--context', default="paper")
@@ -184,8 +84,8 @@ def get_error_mins(benchmark_name, data_dir=None, budget=100):
 @click.option("--output-dir", default=OUTPUT_DIR,
               type=click.Path(file_okay=False, dir_okay=True),
               help="Output directory.")
-def main(benchmark_name, input_dir, methods, ci, context, style, palette,
-         width, aspect, extension, output_dir):
+def main(benchmark_name, input_dir, num_runs, methods, ci, context, style,
+         palette, width, aspect, extension, output_dir):
 
     figsize = size(width, aspect)
     height = width / aspect
@@ -203,7 +103,7 @@ def main(benchmark_name, input_dir, methods, ci, context, style, palette,
     output_path.mkdir(parents=True, exist_ok=True)
 
     METHOD_PRETTY_NAMES = {
-        "random": "Random Search",
+        "random": "Random",
         "tpe": "TPE",
         "bore": "BORE",
         # "boredom": "BORE II",
@@ -214,58 +114,55 @@ def main(benchmark_name, input_dir, methods, ci, context, style, palette,
         "bore-sigmoid-elu-ftol-1e-9-random-0.1": "BORE"
     }
 
-    num_runs = 20
-    # runs = list(range(20))
-    # runs.pop(8)
-    # runs.pop(13-1)
-
     error_min = get_error_mins(benchmark_name, data_dir="datasets/fcnet_tabular_benchmarks")
 
     frames = []
     for method in methods:
 
+        series = {}
         for run in range(num_runs):
 
             path = input_path.joinpath(benchmark_name, method, f"{run:03d}.csv")
-            frame = pd.read_csv(path, index_col=0).assign(run=run, method=method)
+            frame = load_frame(path, run, error_min=error_min)
+            # frames.append(frame)
+            series[run] = extract_series(frame, index="elapsed", column="regret_best")
 
-            try:
-                loss = frame["loss"]
-                cost = frame["info"]
-            except KeyError:
-                loss = frame["error"]
-                cost = frame["cost"]
-
-            best = loss.cummin()
-            elapsed = cost.cumsum()
-            frame = frame.assign(best=best, elapsed=elapsed)
-
-            if error_min is not None:
-                regret = (error_min - loss).abs()
-                regret_best = regret.cummin()
-                frame = frame.assign(regret=regret, regret_best=regret_best)
-
-            frames.append(frame)
-
-        # series = load_runs(input_path.joinpath(benchmark_name, method),
-        #                    runs=num_runs, error_min=error_min)
-        # frame = merge_stack_runs(series)
-        # frames.append(frame.assign(method=method))
+        frame = merge_stack_series(series).assign(method=method)
+        frames.append(frame)
 
     data = pd.concat(frames, axis="index", ignore_index=True, sort=True)
 
-    print(data)
-
     data.replace(dict(method=METHOD_PRETTY_NAMES), inplace=True)
-    # data.replace({"optimizer": {"protein_structure": "Protein Structure"}}, inplace=True)
     data.rename(lambda s: s.replace('_', ' '), axis="columns", inplace=True)
 
     hue_order = style_order = list(map(METHOD_PRETTY_NAMES.get, methods))
 
+    # fig, ax = plt.subplots()
+    # sns.despine(fig=fig, ax=ax, top=True)
+
+    # sns.lineplot(x="iteration", y="regret best",
+    #              hue="method", hue_order=hue_order,
+    #              style="method", style_order=style_order,
+    #              # units="run", estimator=None,
+    #              # ci=None,
+    #              err_kws=dict(edgecolor='none'),
+    #              data=data, ax=ax)
+
+    # ax.set_xlabel("iteration")
+    # ax.set_ylabel("incumbent regret")
+
+    # ax.set_yscale("log")
+
+    # for ext in extension:
+    #     fig.savefig(output_path.joinpath(f"regret_iterations_{context}_{suffix}.{ext}"),
+    #                 bbox_inches="tight")
+
+    # plt.show()
+
     fig, ax = plt.subplots()
     sns.despine(fig=fig, ax=ax, top=True)
 
-    sns.lineplot(x="task", y="regret best",
+    sns.lineplot(x="elapsed", y="regret best",
                  hue="method", hue_order=hue_order,
                  style="method", style_order=style_order,
                  # units="run", estimator=None,
@@ -273,40 +170,38 @@ def main(benchmark_name, input_dir, methods, ci, context, style, palette,
                  err_kws=dict(edgecolor='none'),
                  data=data, ax=ax)
 
-    # ax.set_xlabel("wall-clock time elapsed (s)")
-    ax.set_xlabel("iteration")
+    ax.set_xlabel("wall-clock time elapsed (s)")
     ax.set_ylabel("incumbent regret")
 
     # ax.set_xscale("log")
     ax.set_yscale("log")
-    # ax.set_ylim(1e-1, -error_min)
 
     for ext in extension:
-        fig.savefig(output_path.joinpath(f"regret_iterations_{context}_{suffix}.{ext}"),
+        fig.savefig(output_path.joinpath(f"regret_elapsed_{context}_{suffix}.{ext}"),
                     bbox_inches="tight")
 
     plt.show()
 
-    # g = sns.relplot(x="elapsed", y="regret", hue="run",
-    #                 col="method", palette="tab20",
-    #                 alpha=0.6, kind="scatter", data=data)
-    # g.map(sns.lineplot, "task", "regret best", "run",
-    #       palette="tab20", linewidth=2.0, alpha=0.8)
-    # g.set_axis_labels("iteration", "regret")
+    # # g = sns.relplot(x="elapsed", y="regret", hue="run",
+    # #                 col="method", palette="tab20",
+    # #                 alpha=0.6, kind="scatter", data=data)
+    # # g.map(sns.lineplot, "task", "regret best", "run",
+    # #       palette="tab20", linewidth=2.0, alpha=0.8)
+    # # g.set_axis_labels("iteration", "regret")
 
-    # for ext in extension:
-    #     g.savefig(output_path.joinpath(f"regret_vs_elapsed_all_{context}_{suffix}.{ext}"))
+    # # for ext in extension:
+    # #     g.savefig(output_path.joinpath(f"regret_vs_elapsed_all_{context}_{suffix}.{ext}"))
 
-    # g = sns.relplot(x="task", y="error", hue="epoch",
-    #                 col="run", col_wrap=4, palette="Dark2",
-    #                 alpha=0.6, kind="scatter", data=data.query("method == 'BORE'"))
-    # g.map(plt.plot, "task", "best", color="k", linewidth=2.0, alpha=0.8)
-    # g.set_axis_labels("iteration", "regret")
+    # # g = sns.relplot(x="task", y="error", hue="epoch",
+    # #                 col="run", col_wrap=4, palette="Dark2",
+    # #                 alpha=0.6, kind="scatter", data=data.query("method == 'BORE'"))
+    # # g.map(plt.plot, "task", "best", color="k", linewidth=2.0, alpha=0.8)
+    # # g.set_axis_labels("iteration", "regret")
 
-    # for ext in extension:
-    #     g.savefig(output_path.joinpath(f"error_vs_iterations_{context}_{suffix}.{ext}"))
+    # # for ext in extension:
+    # #     g.savefig(output_path.joinpath(f"error_vs_iterations_{context}_{suffix}.{ext}"))
 
-    return 0
+    # return 0
 
 
 if __name__ == "__main__":
