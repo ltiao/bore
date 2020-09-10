@@ -248,5 +248,3 @@ class RatioEstimator(base_config_generator):
         loss = job.result["loss"]
 
         self.ledger.append(x=config_arr, y=loss, b=budget)
-
-        print(self.ledger.to_dataframe())
