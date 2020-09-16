@@ -8,6 +8,23 @@ from tabular_benchmarks import (FCNetProteinStructureBenchmark,
                                 FCNetParkinsonsTelemonitoringBenchmark)
 
 
+def styblinski_tang(x):
+
+    return 0.5 * np.sum(x**4 - 16 * x**2 + 5*x, axis=-1)
+
+
+def michalewicz(x, m=10):
+
+    N = x.shape[-1]
+    n = np.arange(N) + 1
+
+    a = np.sin(x)
+    b = np.sin(n * x**2 / np.pi)
+    b **= 2*m
+
+    return - np.sum(a * b, axis=-1)
+
+
 def goldstein_price(x, y):
 
     a = 1 + (x + y + 1)**2 * (19 - 14*x + 3*x**2 - 14*y + 6*x*y + 3*y**2)
@@ -35,6 +52,49 @@ def borehole(rw, r, Tu, Hu, Tl, Hl, L, Kw):
 def hartmann(x, alpha, A, P):
     r = np.sum(A * np.square(x - P), axis=-1)
     return - np.dot(np.exp(-r), alpha)
+
+
+class MichalewiczWorker(Worker):
+
+    def __init__(self, dim, m=10, *args, **kwargs):
+
+        super(MichalewiczWorker, self).__init__(*args, **kwargs)
+        self.dim = dim
+        self.m = m
+
+    def compute(self, config, budget, **kwargs):
+
+        X = np.hstack([config[f"x{d}"] for d in range(self.dim)])
+        y = michalewicz(X, m=self.m)
+
+        return dict(loss=y, info=None)
+
+    def get_config_space(self):
+        cs = CS.ConfigurationSpace()
+        for d in range(self.dim):
+            cs.add_hyperparameter(CS.UniformFloatHyperparameter(f"x{d}", lower=0., upper=np.pi))
+        return cs
+
+
+class StyblinskiTangWorker(Worker):
+
+    def __init__(self, dim, *args, **kwargs):
+
+        super(StyblinskiTangWorker, self).__init__(*args, **kwargs)
+        self.dim = dim
+
+    def compute(self, config, budget, **kwargs):
+
+        X = np.hstack([config[f"x{d}"] for d in range(self.dim)])
+        y = styblinski_tang(X)
+
+        return dict(loss=y, info=None)
+
+    def get_config_space(self):
+        cs = CS.ConfigurationSpace()
+        for d in range(self.dim):
+            cs.add_hyperparameter(CS.UniformFloatHyperparameter(f"x{d}", lower=0., upper=np.pi))
+        return cs
 
 
 class BraninWorker(Worker):

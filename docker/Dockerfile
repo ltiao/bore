@@ -26,7 +26,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements*.txt ./
 RUN python -m pip install --no-cache-dir --upgrade pip==20.2.3 keyrings.alt==3.4.0 && \
     python -m pip install --no-cache-dir -r requirements_dev.txt && \
-	python -m pip install --no-cache-dir -r requirements.txt
+    python -m pip install --no-cache-dir -r requirements.txt
 
 # Install HpBandSter and HPO Bench
 RUN python -m pip install --no-cache-dir Cython==0.29.21 && \

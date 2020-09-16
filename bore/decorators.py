@@ -3,6 +3,15 @@ import tensorflow as tf
 from functools import wraps
 
 
+def stack(fn):
+
+    @wraps(fn)
+    def new_fn(*args):
+        return fn(tf.stack(args))
+
+    return new_fn
+
+
 def unstack(fn):
 
     @wraps(fn)
