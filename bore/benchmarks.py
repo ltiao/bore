@@ -93,7 +93,7 @@ class StyblinskiTangWorker(Worker):
     def get_config_space(self):
         cs = CS.ConfigurationSpace()
         for d in range(self.dim):
-            cs.add_hyperparameter(CS.UniformFloatHyperparameter(f"x{d}", lower=0., upper=np.pi))
+            cs.add_hyperparameter(CS.UniformFloatHyperparameter(f"x{d}", lower=-5., upper=5.))
         return cs
 
 
