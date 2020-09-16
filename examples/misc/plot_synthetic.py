@@ -130,7 +130,7 @@ plt.show()
 
 fig, ax = plt.subplots()
 
-sns.lineplot(x="name", y="regret", hue="iteration", palette="viridis",
+sns.lineplot(x="name", y="regret", hue="iteration", palette="viridis_r",
              ci=None, linewidth=0.1, data=data, ax=ax)
 
 plt.show()
@@ -138,7 +138,8 @@ plt.show()
 
 fig, ax = plt.subplots()
 
-sns.lineplot(x="name", y="regret", ci='sd', linewidth=0.5, data=data, ax=ax)
+sns.lineplot(x="name", y="regret", ci='sd',
+             data=data.query(f"iteration == {num_iterations-1}"), ax=ax)
 
 ax.set_ylabel(f"final regret (after {num_iterations} evaluations)")
 

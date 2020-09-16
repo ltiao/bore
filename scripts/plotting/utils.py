@@ -1,8 +1,23 @@
 import numpy as np
 import pandas as pd
+import yaml
+
+from pathlib import Path
+from tabular_benchmarks import (FCNetProteinStructureBenchmark,
+                                FCNetSliceLocalizationBenchmark,
+                                FCNetNavalPropulsionBenchmark,
+                                FCNetParkinsonsTelemonitoringBenchmark)
+
 
 GOLDEN_RATIO = 0.5 * (1 + np.sqrt(5))
 WIDTH = 397.48499
+ERROR_MINS = dict(
+    branin=0.397887,
+    hartmann3d=-3.86278,
+    hartmann6d=-3.32237,
+    borehole=-309.5755876604079,
+    styblinski_tang=-39.16599
+)
 
 
 def pt_to_in(x):
@@ -13,6 +28,55 @@ def pt_to_in(x):
 def size(width, aspect=GOLDEN_RATIO):
     width_in = pt_to_in(width)
     return (width_in, width_in / aspect)
+
+
+def get_error_mins(benchmark_name, data_dir=None):
+
+    if benchmark_name.startswith("fcnet"):
+
+        assert data_dir is not None, "data directory must be specified"
+
+        if benchmark_name.endswith("protein"):
+            benchmark = FCNetProteinStructureBenchmark(data_dir=data_dir)
+        elif benchmark_name.endswith("slice"):
+            benchmark = FCNetSliceLocalizationBenchmark(data_dir=data_dir)
+        elif benchmark_name.endswith("naval"):
+            benchmark = FCNetNavalPropulsionBenchmark(data_dir=data_dir)
+        elif benchmark_name.endswith("parkinsons"):
+            benchmark = FCNetParkinsonsTelemonitoringBenchmark(data_dir=data_dir)
+        else:
+            raise ValueError("dataset name not recognized!")
+
+        path = Path(data_dir).joinpath("global_optimum.yaml")
+        if path.exists():
+
+            with path.open('r') as f:
+                d = yaml.load(f)
+
+            config_dict = d["config_dict"]
+            val_error_min = d["val_error_min"]
+            test_error_min = d["test_error_min"]
+
+        else:
+
+            config_dict, \
+                val_error_min, test_error_min = benchmark.get_best_configuration()
+
+            d = dict(config_dict=config_dict,
+                     val_error_min=float(val_error_min),
+                     test_error_min=float(test_error_min))
+
+            with path.open('w') as f:
+                yaml.dump(d, f)
+
+        return float(val_error_min)
+
+    if benchmark_name.startswith("styblinski_tang"):
+        *head, dimensions_str = benchmark_name.split('_')
+        dimensions = int(dimensions_str[:-1])
+        return dimensions * ERROR_MINS.get("styblinski_tang")
+
+    return ERROR_MINS.get(benchmark_name)
 
 
 def load_frame(path, run, error_min=None, sort_by="finished"):

@@ -7,16 +7,15 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from pathlib import Path
-from utils import (GOLDEN_RATIO, WIDTH, size, load_frame, extract_series,
-                   merge_stack_series, get_error_mins)
+from utils import GOLDEN_RATIO, WIDTH, size, load_frame, ERROR_MINS
 
 OUTPUT_DIR = "figures/"
 
 
 @click.command()
-@click.argument("benchmark_name")
 @click.argument("input_dir", default="results",
                 type=click.Path(file_okay=False, dir_okay=True))
+@click.option('--dimensions', '-d', multiple=True, type=int)
 @click.option('--num-runs', '-n', default=20)
 @click.option('--methods', '-m', multiple=True)
 @click.option('--ci')
@@ -29,7 +28,7 @@ OUTPUT_DIR = "figures/"
 @click.option("--output-dir", default=OUTPUT_DIR,
               type=click.Path(file_okay=False, dir_okay=True),
               help="Output directory.")
-def main(benchmark_name, input_dir, num_runs, methods, ci, context, style,
+def main(input_dir, dimensions, num_runs, methods, ci, context, style,
          palette, width, aspect, extension, output_dir):
 
     figsize = size(width, aspect)
@@ -43,65 +42,77 @@ def main(benchmark_name, input_dir, num_runs, methods, ci, context, style,
     }
     sns.set(context=context, style=style, palette=palette, font="serif", rc=rc)
 
+    num_iterations = 500
+    base_benchmark_name = "styblinski_tang"
+    base_error_min = ERROR_MINS.get(base_benchmark_name)
+
     input_path = Path(input_dir)
-    output_path = Path(output_dir).joinpath(benchmark_name)
+    output_path = Path(output_dir).joinpath(base_benchmark_name)
     output_path.mkdir(parents=True, exist_ok=True)
 
     METHOD_PRETTY_NAMES = {
         "random": "Random",
         "tpe": "TPE",
         "bore": "BORE",
-        # "boredom": "BORE II",
-        # "boredom-real": "BORE III",
-        "bore-sigmoid-elu-ftol-1e-2-gamma-0.33333333333333333333": "BORE",
-        "boredom-real": "BORE",
-        "bore-logit-elu-ftol-1e-2-gamma-0.33333333333333333333": "BORE",
-        "bore-sigmoid-elu-ftol-1e-9-random-0.1": "BORE"
     }
 
-    error_min = get_error_mins(benchmark_name, data_dir="datasets/fcnet_tabular_benchmarks")
-
     frames = []
-    for method in methods:
+    for d in dimensions:
 
-        # series = {}
-        for run in range(num_runs):
+        benchmark_name = f"{base_benchmark_name}_{d:03d}d"
+        error_min = d * base_error_min
 
-            path = input_path.joinpath(benchmark_name, method, f"{run:03d}.csv")
-            frame = load_frame(path, run, error_min=error_min)
-            frames.append(frame.assign(method=method))
-            # series[run] = extract_series(frame, index="elapsed", column="regret_best")
+        for method in methods:
 
-        # frame = merge_stack_series(series).assign(method=method)
-        # frames.append(frame)
+            for run in range(num_runs):
+
+                path = input_path.joinpath(benchmark_name, method, f"{run:03d}.csv")
+                frame = load_frame(path, run, error_min=error_min)
+                frames.append(frame.assign(method=method, d=d))
+
+    print(frames)
 
     data = pd.concat(frames, axis="index", ignore_index=True, sort=True)
 
     data.replace(dict(method=METHOD_PRETTY_NAMES), inplace=True)
     data.rename(lambda s: s.replace('_', ' '), axis="columns", inplace=True)
 
-    print(data)
-
     hue_order = style_order = list(map(METHOD_PRETTY_NAMES.get, methods))
 
     fig, ax = plt.subplots()
     sns.despine(fig=fig, ax=ax, top=True)
 
-    sns.lineplot(x="iteration", y="regret best",
-                 hue="method", hue_order=hue_order,
+    sns.lineplot(x="d", y="regret best", hue="method", hue_order=hue_order,
                  style="method", style_order=style_order,
                  # units="run", estimator=None,
                  # ci=None,
                  err_kws=dict(edgecolor='none'),
-                 data=data, ax=ax)
+                 data=data.query(f"iteration == {num_iterations-1}"), ax=ax)
 
-    ax.set_xlabel("evaluations")
-    ax.set_ylabel("simple regret")
+    ax.set_xlabel(r"$D$")
+    ax.set_ylabel(f"final regret (after {num_iterations} evaluations)")
 
     ax.set_yscale("log")
 
     for ext in extension:
-        fig.savefig(output_path.joinpath(f"regret_iterations_{context}_{suffix}.{ext}"),
+        fig.savefig(output_path.joinpath(f"line_regret_dimensions_{context}_{suffix}.{ext}"),
+                    bbox_inches="tight")
+
+    plt.show()
+
+    fig, ax = plt.subplots()
+    sns.despine(fig=fig, ax=ax, top=True)
+
+    sns.boxplot(x="d", y="regret best", hue="method", hue_order=hue_order,
+                data=data.query(f"iteration == {num_iterations-1}"), ax=ax)
+
+    ax.set_xlabel(r"$D$")
+    ax.set_ylabel(f"final regret (after {num_iterations} evaluations)")
+
+    # ax.set_yscale("log")
+
+    for ext in extension:
+        fig.savefig(output_path.joinpath(f"box_regret_dimensions_{context}_{suffix}.{ext}"),
                     bbox_inches="tight")
 
     plt.show()
