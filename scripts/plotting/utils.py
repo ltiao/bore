@@ -30,24 +30,14 @@ def size(width, aspect=GOLDEN_RATIO):
     return (width_in, width_in / aspect)
 
 
-def get_error_mins(benchmark_name, data_dir=None):
+def get_error_mins(benchmark_name, input_dir, data_dir=None):
+
+    base_path = Path(input_dir).joinpath(benchmark_name)
 
     if benchmark_name.startswith("fcnet"):
 
-        assert data_dir is not None, "data directory must be specified"
+        path = base_path.joinpath("minimum.yaml")
 
-        if benchmark_name.endswith("protein"):
-            benchmark = FCNetProteinStructureBenchmark(data_dir=data_dir)
-        elif benchmark_name.endswith("slice"):
-            benchmark = FCNetSliceLocalizationBenchmark(data_dir=data_dir)
-        elif benchmark_name.endswith("naval"):
-            benchmark = FCNetNavalPropulsionBenchmark(data_dir=data_dir)
-        elif benchmark_name.endswith("parkinsons"):
-            benchmark = FCNetParkinsonsTelemonitoringBenchmark(data_dir=data_dir)
-        else:
-            raise ValueError("dataset name not recognized!")
-
-        path = Path(data_dir).joinpath("global_optimum.yaml")
         if path.exists():
 
             with path.open('r') as f:
@@ -58,6 +48,18 @@ def get_error_mins(benchmark_name, data_dir=None):
             test_error_min = d["test_error_min"]
 
         else:
+            assert data_dir is not None, "data directory must be specified"
+
+            if benchmark_name.endswith("protein"):
+                benchmark = FCNetProteinStructureBenchmark(data_dir=data_dir)
+            elif benchmark_name.endswith("slice"):
+                benchmark = FCNetSliceLocalizationBenchmark(data_dir=data_dir)
+            elif benchmark_name.endswith("naval"):
+                benchmark = FCNetNavalPropulsionBenchmark(data_dir=data_dir)
+            elif benchmark_name.endswith("parkinsons"):
+                benchmark = FCNetParkinsonsTelemonitoringBenchmark(data_dir=data_dir)
+            else:
+                raise ValueError("dataset name not recognized!")
 
             config_dict, \
                 val_error_min, test_error_min = benchmark.get_best_configuration()
@@ -75,6 +77,13 @@ def get_error_mins(benchmark_name, data_dir=None):
         *head, dimensions_str = benchmark_name.split('_')
         dimensions = int(dimensions_str[:-1])
         return dimensions * ERROR_MINS.get("styblinski_tang")
+
+    if benchmark_name.startswith("michalewicz"):
+
+        path = base_path.joinpath("L-BFGS-B", "minimum.yaml")
+        with path.open('r') as f:
+            error_min = yaml.load(f).get('y')
+        return error_min
 
     return ERROR_MINS.get(benchmark_name)
 

@@ -59,7 +59,7 @@ def main(benchmark_name, input_dir, num_runs, methods, ci, context, style,
         "bore-sigmoid-elu-ftol-1e-9-random-0.1": "BORE"
     }
 
-    error_min = get_error_mins(benchmark_name, data_dir="datasets/fcnet_tabular_benchmarks")
+    error_min = get_error_mins(benchmark_name, input_dir, data_dir="datasets/fcnet_tabular_benchmarks")
 
     frames = []
     for method in methods:
