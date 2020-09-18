@@ -27,7 +27,7 @@ from utils import get_worker, get_name
 @click.option("--num-samples", default=64)
 @click.option("--random-fraction", default=1/3)
 @click.option("--bandwidth-factor", default=3)
-@click.option("--min-bandwidth", default=0.3)
+@click.option("--min-bandwidth", default=1e-3)
 @click.option("--input-dir", default="datasets/fcnet_tabular_benchmarks",
               type=click.Path(file_okay=False, dir_okay=True),
               help="Input data directory.")
