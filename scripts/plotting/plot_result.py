@@ -8,7 +8,7 @@ import seaborn as sns
 
 from pathlib import Path
 from utils import (GOLDEN_RATIO, WIDTH, size, load_frame, extract_series,
-                   merge_stack_series, get_error_mins)
+                   merge_stack_series, get_error_mins, sanitize, get_ci)
 
 OUTPUT_DIR = "figures/"
 
@@ -51,6 +51,8 @@ def main(benchmark_name, input_dir, num_runs, methods, ci, context, style,
         "random": "Random",
         "tpe": "TPE",
         "bore": "BORE",
+        "bore-steps-50": "BORE (50 steps)",
+        "bore-steps": "BORE (250 steps)",
         # "boredom": "BORE II",
         # "boredom-real": "BORE III",
         "bore-sigmoid-elu-ftol-1e-2-gamma-0.33333333333333333333": "BORE",
@@ -59,40 +61,45 @@ def main(benchmark_name, input_dir, num_runs, methods, ci, context, style,
         "bore-sigmoid-elu-ftol-1e-9-random-0.1": "BORE"
     }
 
-    error_min = get_error_mins(benchmark_name, input_dir, data_dir="datasets/fcnet_tabular_benchmarks")
+    loss_min = get_error_mins(benchmark_name, input_dir,
+                              data_dir="datasets/fcnet_tabular_benchmarks")
 
     frames = []
+    frames_merged = []
+
     for method in methods:
 
-        # series = {}
+        series = {}
         for run in range(num_runs):
 
             path = input_path.joinpath(benchmark_name, method, f"{run:03d}.csv")
-            frame = load_frame(path, run, error_min=error_min)
-            frames.append(frame.assign(method=method))
-            # series[run] = extract_series(frame, index="elapsed", column="regret_best")
 
-        # frame = merge_stack_series(series).assign(method=method)
-        # frames.append(frame)
+            frame = load_frame(path, run, loss_min=loss_min)
+            frames.append(frame.assign(method=method))
+
+            series[run] = extract_series(frame, index="elapsed", column="regret")
+
+        frame_merged = merge_stack_series(series, y_key="regret")
+        frames_merged.append(frame_merged.assign(method=method))
 
     data = pd.concat(frames, axis="index", ignore_index=True, sort=True)
+    data = sanitize(data, mapping=METHOD_PRETTY_NAMES)
 
-    data.replace(dict(method=METHOD_PRETTY_NAMES), inplace=True)
-    data.rename(lambda s: s.replace('_', ' '), axis="columns", inplace=True)
+    data_merged = pd.concat(frames_merged, axis="index", ignore_index=True, sort=True)
+    data_merged = sanitize(data_merged, mapping=METHOD_PRETTY_NAMES)
 
-    print(data)
+    print(data_merged)
 
     hue_order = style_order = list(map(METHOD_PRETTY_NAMES.get, methods))
 
     fig, ax = plt.subplots()
     sns.despine(fig=fig, ax=ax, top=True)
 
-    sns.lineplot(x="iteration", y="regret best",
-                 hue="method", hue_order=hue_order,
-                 style="method", style_order=style_order,
+    sns.lineplot(x="evaluation", y="regret",
+                 hue="method",  # hue_order=hue_order,
+                 style="method",  # style_order=style_order,
                  # units="run", estimator=None,
-                 # ci=None,
-                 err_kws=dict(edgecolor='none'),
+                 ci=get_ci(ci), err_kws=dict(edgecolor='none'),
                  data=data, ax=ax)
 
     ax.set_xlabel("evaluations")
@@ -106,28 +113,26 @@ def main(benchmark_name, input_dir, num_runs, methods, ci, context, style,
 
     plt.show()
 
-    # fig, ax = plt.subplots()
-    # sns.despine(fig=fig, ax=ax, top=True)
+    fig, ax = plt.subplots()
+    sns.despine(fig=fig, ax=ax, top=True)
 
-    # sns.lineplot(x="elapsed", y="regret best",
-    #              hue="method", hue_order=hue_order,
-    #              style="method", style_order=style_order,
-    #              # units="run", estimator=None,
-    #              # ci=None,
-    #              err_kws=dict(edgecolor='none'),
-    #              data=data, ax=ax)
+    sns.lineplot(x="elapsed", y="regret",
+                 hue="method",  # hue_order=hue_order,
+                 style="method",  # style_order=style_order,
+                 # units="run", estimator=None,
+                 ci=get_ci(ci), err_kws=dict(edgecolor='none'),
+                 data=data_merged, ax=ax)
 
-    # ax.set_xlabel("wall-clock time elapsed (s)")
-    # ax.set_ylabel("incumbent regret")
+    ax.set_xlabel("wall-clock time elapsed (s)")
+    ax.set_ylabel("evaluations")
 
-    # # ax.set_xscale("log")
     # ax.set_yscale("log")
 
-    # for ext in extension:
-    #     fig.savefig(output_path.joinpath(f"regret_elapsed_{context}_{suffix}.{ext}"),
-    #                 bbox_inches="tight")
+    for ext in extension:
+        fig.savefig(output_path.joinpath(f"regret_elapsed_{context}_{suffix}.{ext}"),
+                    bbox_inches="tight")
 
-    # plt.show()
+    plt.show()
 
     # # g = sns.relplot(x="elapsed", y="regret", hue="run",
     # #                 col="method", palette="tab20",

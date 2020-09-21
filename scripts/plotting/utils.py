@@ -30,6 +30,24 @@ def size(width, aspect=GOLDEN_RATIO):
     return (width_in, width_in / aspect)
 
 
+def sanitize(data, mapping):
+
+    return data.replace(dict(method=mapping)) \
+               .rename(lambda s: s.replace('_', ' '), axis="columns")
+
+
+def get_ci(ci):
+
+    if ci is not None:
+
+        try:
+            return int(ci)
+        except ValueError:
+            assert ci == "sd", "if `ci` is not integer and not None, " \
+                "it must be 'sd'!"
+    return ci
+
+
 def get_error_mins(benchmark_name, input_dir, data_dir=None):
 
     base_path = Path(input_dir).joinpath(benchmark_name)
@@ -41,11 +59,7 @@ def get_error_mins(benchmark_name, input_dir, data_dir=None):
         if path.exists():
 
             with path.open('r') as f:
-                d = yaml.load(f)
-
-            config_dict = d["config_dict"]
-            val_error_min = d["val_error_min"]
-            test_error_min = d["test_error_min"]
+                val_error_min = yaml.safe_load(f).get("val_error_min")
 
         else:
             assert data_dir is not None, "data directory must be specified"
@@ -82,48 +96,49 @@ def get_error_mins(benchmark_name, input_dir, data_dir=None):
 
         path = base_path.joinpath("L-BFGS-B", "minimum.yaml")
         with path.open('r') as f:
-            error_min = yaml.load(f).get('y')
+            error_min = yaml.safe_load(f).get('y')
         return error_min
 
     return ERROR_MINS.get(benchmark_name)
 
 
-def load_frame(path, run, error_min=None, sort_by="finished"):
+def load_frame(path, run, loss_min=None, loss_key="loss", sort_key="finished",
+               duration_key="info"):
 
     frame = pd.read_csv(path, index_col=0)
 
     # sort and drop old index
-    frame.sort_values(by=sort_by, axis="index", ascending=True, inplace=True)
+    frame.sort_values(by=sort_key, axis="index", ascending=True, inplace=True)
     frame.reset_index(drop=True, inplace=True)
 
-    error = frame["loss"]
-    duration = frame["info"]
+    loss = frame[loss_key]
+    duration = frame[duration_key]
 
-    best = error.cummin()
+    best = loss.cummin()
     elapsed = duration.cumsum()
 
     target = frame.groupby(by="task").epoch.max()
     resource = frame.epoch.cumsum()
 
-    frame = frame.assign(run=run, iteration=frame.index + 1,
+    frame = frame.assign(run=run, evaluation=frame.index + 1,
                          best=best, elapsed=elapsed, target=target,
                          resource=resource)
 
-    if error_min is not None:
-        regret = error.sub(error_min).abs()
-        regret_best = regret.cummin()
-        frame = frame.assign(regret=regret, regret_best=regret_best)
+    if loss_min is not None:
+        error = loss.sub(loss_min).abs()
+        regret = error.cummin()
+        frame = frame.assign(error=error, regret=regret)
 
     return frame
 
 
-def extract_series(frame, index="elapsed", column="regret_best"):
+def extract_series(frame, index="elapsed", column="regret"):
 
     frame_new = frame.set_index(index)
     series = frame_new[column]
 
     # (0) save last timestamp and value
-    tail = series.tail(n=1)
+    # tail = series.tail(n=1)
     # (1) de-duplicate the values (significantly speed-up
     # subsequent processing)
     # (2) de-duplicate the indices (it is entirely possible
@@ -133,12 +148,12 @@ def extract_series(frame, index="elapsed", column="regret_best"):
     # (3) add back last timestamp and value which can get
     # lost in step (1)
     series_new = series.drop_duplicates(keep="first") \
-                       .groupby(level=index).min() \
-                       .append(tail)
+                       .groupby(level=index).min()
+    # .append(tail)
     return series_new
 
 
-def merge_stack_series(series_dict, run_key="run", y_key="regret_best"):
+def merge_stack_series(series_dict, run_key="run", y_key="regret"):
 
     frame = pd.DataFrame(series_dict)
 
