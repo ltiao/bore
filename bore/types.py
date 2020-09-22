@@ -28,8 +28,10 @@ class DenseConfigurationSpace(CS.ConfigurationSpace):
         self.size_dense = size_dense
 
     def sample_configuration(self, size=1):
-        config = super(DenseConfigurationSpace, self).sample_configuration(size=size)
-        return DenseConfiguration(self, values=config.get_dictionary())
+        configs = super(DenseConfigurationSpace, self).sample_configuration(size=size)
+        configs = [configs] if size == 1 else configs
+        for config in configs:
+            yield DenseConfiguration(self, values=config)
 
     def get_bounds(self):
 

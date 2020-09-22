@@ -1,12 +1,10 @@
 import numpy as np
-import tensorflow as tf
 
 from tensorflow.keras.losses import BinaryCrossentropy
 
-from ..engine import Ledger, minimize_multi_start, is_duplicate
+from ..engine import Ledger
 from ..types import DenseConfigurationSpace, DenseConfiguration
 from ..models import DenseSequential
-from ..decorators import unbatch, value_and_gradient, numpy_io
 
 from hpbandster.optimizers.hyperband import HyperBand
 from hpbandster.core.base_config_generator import base_config_generator
@@ -15,23 +13,23 @@ from hpbandster.core.base_config_generator import base_config_generator
 class BORE(HyperBand):
 
     def __init__(self, config_space, eta=3, min_budget=0.01, max_budget=1,
-                 gamma=None, num_random_init=10, random_rate=0.25,
-                 num_restarts=10, batch_size=64, num_steps_per_iter=1000,
+                 gamma=None, num_random_init=10, num_random_samples=64,
+                 random_rate=0.1, batch_size=64, num_steps_per_iter=1000,
                  optimizer="adam", num_layers=2, num_units=32,
-                 activation="relu", normalize=True, method="L-BFGS-B",
-                 max_iter=100, ftol=1e-2, seed=None, **kwargs):
+                 activation="relu", seed=None, **kwargs):
 
         if gamma is None:
             gamma = 1/eta
 
         cg = RatioEstimator(config_space=config_space, gamma=gamma,
-                            num_random_init=num_random_init, random_rate=random_rate,
-                            num_restarts=num_restarts, batch_size=batch_size,
+                            num_random_init=num_random_init,
+                            num_random_samples=num_random_samples,
+                            random_rate=random_rate,
+                            batch_size=batch_size,
                             num_steps_per_iter=num_steps_per_iter,
                             optimizer=optimizer, num_layers=num_layers,
                             num_units=num_units, activation=activation,
-                            normalize=normalize, method=method,
-                            max_iter=max_iter, ftol=ftol, seed=seed)
+                            seed=seed)
         # (LT): Note this is using the *grandparent* class initializer to
         # replace the config_generator!
         super(HyperBand, self).__init__(config_generator=cg, **kwargs)
@@ -67,18 +65,15 @@ class RatioEstimator(base_config_generator):
     class to implement random sampling from a ConfigSpace
     """
     def __init__(self, config_space, gamma=1/3, num_random_init=10,
-                 random_rate=0.25, num_restarts=3, batch_size=64,
+                 num_random_samples=64, random_rate=0.1, batch_size=64,
                  num_steps_per_iter=1000, optimizer="adam", num_layers=2,
-                 num_units=32, activation="relu", normalize=True,
-                 method="L-BFGS-B", max_iter=100, ftol=1e-2, seed=None,
-                 **kwargs):
+                 num_units=32, activation="relu", seed=None, **kwargs):
 
         super(RatioEstimator, self).__init__(**kwargs)
 
         assert 0. < gamma < 1., "`gamma` must be in (0, 1)"
         assert 0. <= random_rate < 1., "`random_rate` must be in [0, 1)"
         assert num_random_init > 0
-        assert num_restarts > 0
 
         self.config_space = DenseConfigurationSpace(config_space, seed=seed)
         self.bounds = self.config_space.get_bounds()
@@ -86,20 +81,11 @@ class RatioEstimator(base_config_generator):
         self.logit = self._build_compile_network(num_layers, num_units,
                                                  activation, optimizer)
 
-        if normalize:
-            final = tf.sigmoid
-        else:
-            final = tf.identity
-        self.loss = self._build_loss(activation=final)
-
         self.gamma = gamma
         self.num_random_init = num_random_init
         self.random_rate = random_rate
 
-        self.num_restarts = num_restarts
-        self.method = method
-        self.ftol = ftol
-        self.max_iter = max_iter
+        self.num_random_samples = num_random_samples
 
         self.batch_size = batch_size
         self.num_steps_per_iter = num_steps_per_iter
@@ -134,19 +120,6 @@ class RatioEstimator(base_config_generator):
                         loss=BinaryCrossentropy(from_logits=True))
         return network
 
-    def _build_loss(self, activation):
-        """
-        Returns the loss, i.e. the (negative) acquisition function to be
-        minimized through the `scipy.optimize` interface.
-        """
-        @numpy_io
-        @value_and_gradient
-        @unbatch
-        def loss(x):
-            return - activation(self.logit(x))
-
-        return loss
-
     def _update_model(self):
 
         X, z = self.ledger.load_classification_data(self.gamma)
@@ -167,40 +140,11 @@ class RatioEstimator(base_config_generator):
                          f"num steps per iter: {self.num_steps_per_iter}, "
                          f"num epochs: {num_epochs}")
 
-    def _get_maximum(self):
-
-        self.logger.debug("Beginning multi-start maximization with "
-                          f"{self.num_restarts} starts...")
-
-        results = minimize_multi_start(self.loss, self.bounds,
-                                       num_restarts=self.num_restarts,
-                                       method=self.method, jac=True,
-                                       options=dict(maxiter=self.max_iter,
-                                                    ftol=self.ftol),
-                                       random_state=self.random_state)
-
-        res_best = None
-        for i, res in enumerate(results):
-            self.logger.debug(f"[Maximum {i+1:02d}/{self.num_restarts:02d}: "
-                              f"value={-res.fun:.3f}] success: {res.success}, "
-                              f"iterations: {res.nit:02d}, status: {res.status}"
-                              f" ({res.message})")
-
-            # TODO(LT): Create Enum type for these status codes
-            if (res.status == 0 or res.status == 9) and \
-                    not is_duplicate(res.x, self.ledger.features):
-                # if (res_best is not None) *implies* (res.fun < res_best.fun)
-                # (i.e. material implication) is logically equivalent to below
-                if res_best is None or res.fun < res_best.fun:
-                    res_best = res
-
-        return res_best
-
     def get_config(self, budget):
 
         dataset_size = self.ledger.size()
 
-        config_random = self.config_space.sample_configuration()
+        config_random = next(self.config_space.sample_configuration())
         config_random_dict = config_random.get_dictionary()
 
         if dataset_size < self.num_random_init:
@@ -214,24 +158,19 @@ class RatioEstimator(base_config_generator):
                              "Returning random candidate ...")
             return (config_random_dict, {})
 
-        # Update model
-        self._update_model()
+        s = []
+        for config_random in self.config_space.sample_configuration(size=self.num_random_samples):
 
-        # Maximize acquisition function
-        opt = self._get_maximum()
-        if opt is None:
-            # TODO(LT): It's actually important to report what one of these
-            # occurred...
-            self.logger.warn("[Glob. maximum: not found!] Either optimization "
-                             f"failed in all {self.num_restarts} starts, or "
-                             "all maxima found have been evaluated previously!"
-                             " Returning random candidate...")
-            return (config_random_dict, {})
+            config_random_dict = config_random.get_dictionary()
+            config_random_arr = self._array_from_dict(config_random_dict)
+            s.append(config_random_arr)
 
-        self.logger.info(f"[Glob. maximum: value={-opt.fun:.3f}, x={opt.x}")
+        X_pred = np.vstack(s)
+        y_pred = self.logit.predict(X_pred).squeeze(axis=-1)
 
-        config_opt_arr = opt.x
-        config_opt_dict = self._dict_from_array(config_opt_arr)
+        ind = y_pred.argmax()
+
+        config_opt_dict = self._dict_from_array(s[ind])
 
         return (config_opt_dict, {})
 
