@@ -158,6 +158,9 @@ class RatioEstimator(base_config_generator):
                              "Returning random candidate ...")
             return (config_random_dict, {})
 
+        # Update model
+        self._update_model()
+
         s = []
         for config_random in self.config_space.sample_configuration(size=self.num_random_samples):
 
