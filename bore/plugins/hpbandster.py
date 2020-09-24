@@ -2,6 +2,7 @@ import numpy as np
 import tensorflow as tf
 
 from tensorflow.keras.losses import BinaryCrossentropy
+import scipy.stats as sps
 
 from ..engine import Ledger, minimize_multi_start, is_duplicate
 from ..types import DenseConfigurationSpace, DenseConfiguration
@@ -19,7 +20,7 @@ class BORE(HyperBand):
                  num_restarts=10, batch_size=64, num_steps_per_iter=1000,
                  optimizer="adam", num_layers=2, num_units=32,
                  activation="relu", normalize=True, method="L-BFGS-B",
-                 max_iter=100, ftol=1e-2, seed=None, **kwargs):
+                 max_iter=100, ftol=1e-2, distortion=1e-3, seed=None, **kwargs):
 
         if gamma is None:
             gamma = 1/eta
@@ -31,7 +32,7 @@ class BORE(HyperBand):
                             optimizer=optimizer, num_layers=num_layers,
                             num_units=num_units, activation=activation,
                             normalize=normalize, method=method,
-                            max_iter=max_iter, ftol=ftol, seed=seed)
+                            max_iter=max_iter, ftol=ftol, distortion=distortion, seed=seed)
         # (LT): Note this is using the *grandparent* class initializer to
         # replace the config_generator!
         super(HyperBand, self).__init__(config_generator=cg, **kwargs)
@@ -70,8 +71,8 @@ class RatioEstimator(base_config_generator):
                  random_rate=0.25, num_restarts=3, batch_size=64,
                  num_steps_per_iter=1000, optimizer="adam", num_layers=2,
                  num_units=32, activation="relu", normalize=True,
-                 method="L-BFGS-B", max_iter=100, ftol=1e-2, seed=None,
-                 **kwargs):
+                 method="L-BFGS-B", max_iter=100, ftol=1e-2, distortion=1e-3,
+                 seed=None, **kwargs):
 
         super(RatioEstimator, self).__init__(**kwargs)
 
@@ -100,6 +101,7 @@ class RatioEstimator(base_config_generator):
         self.method = method
         self.ftol = ftol
         self.max_iter = max_iter
+        self.distortion = distortion
 
         self.batch_size = batch_size
         self.num_steps_per_iter = num_steps_per_iter
@@ -230,7 +232,20 @@ class RatioEstimator(base_config_generator):
 
         self.logger.info(f"[Glob. maximum: value={-opt.fun:.3f}, x={opt.x}")
 
-        config_opt_arr = opt.x
+        loc = opt.x
+
+        if self.distortion is None:
+
+            config_opt_arr = loc
+        else:
+
+            # dist = multivariate_normal(mean=opt.x, cov=opt.hess_inv.todense())
+            a = (self.bounds.lb - loc) / self.distortion
+            b = (self.bounds.ub - loc) / self.distortion
+            dist = sps.truncnorm(a=a, b=b, loc=loc, scale=self.distortion)
+
+            config_opt_arr = dist.rvs(random_state=self.random_state)
+
         config_opt_dict = self._dict_from_array(config_opt_arr)
 
         return (config_opt_dict, {})

@@ -20,6 +20,7 @@ OUTPUT_DIR = "figures/"
 @click.option('--num-runs', '-n', default=20)
 @click.option('--methods', '-m', multiple=True)
 @click.option('--ci')
+@click.option('--duration-key', default="info")
 @click.option('--context', default="paper")
 @click.option('--style', default="ticks")
 @click.option('--palette', default="muted")
@@ -29,8 +30,8 @@ OUTPUT_DIR = "figures/"
 @click.option("--output-dir", default=OUTPUT_DIR,
               type=click.Path(file_okay=False, dir_okay=True),
               help="Output directory.")
-def main(benchmark_name, input_dir, num_runs, methods, ci, context, style,
-         palette, width, aspect, extension, output_dir):
+def main(benchmark_name, input_dir, num_runs, methods, ci, duration_key,
+         context, style, palette, width, aspect, extension, output_dir):
 
     figsize = size(width, aspect)
     height = width / aspect
@@ -53,8 +54,8 @@ def main(benchmark_name, input_dir, num_runs, methods, ci, context, style,
         "bore": "BORE",
         "bore-steps-50": "BORE (50 steps)",
         "bore-steps": "BORE (250 steps)",
-        # "boredom": "BORE II",
-        # "boredom-real": "BORE III",
+        "boredom": "BOREDOM",
+        "boredom-real": "BORE",
         "bore-sigmoid-elu-ftol-1e-2-gamma-0.33333333333333333333": "BORE",
         "boredom-real": "BORE",
         "bore-logit-elu-ftol-1e-2-gamma-0.33333333333333333333": "BORE",
@@ -74,7 +75,8 @@ def main(benchmark_name, input_dir, num_runs, methods, ci, context, style,
 
             path = input_path.joinpath(benchmark_name, method, f"{run:03d}.csv")
 
-            frame = load_frame(path, run, loss_min=loss_min)
+            frame = load_frame(path, run, loss_min=loss_min,
+                               duration_key=duration_key)
             frames.append(frame.assign(method=method))
 
             series[run] = extract_series(frame, index="elapsed", column="regret")
@@ -124,9 +126,9 @@ def main(benchmark_name, input_dir, num_runs, methods, ci, context, style,
                  data=data_merged, ax=ax)
 
     ax.set_xlabel("wall-clock time elapsed (s)")
-    ax.set_ylabel("evaluations")
+    ax.set_ylabel("simple regret")
 
-    # ax.set_yscale("log")
+    ax.set_yscale("log")
 
     for ext in extension:
         fig.savefig(output_path.joinpath(f"regret_elapsed_{context}_{suffix}.{ext}"),

@@ -38,8 +38,9 @@ logging.basicConfig(level=logging.INFO)
 @click.option("--activation", default="elu")
 @click.option('--normalize/--no-normalize', default=True)
 @click.option("--method", default="L-BFGS-B")
-@click.option("--max-iter", default=100)
-@click.option("--ftol", default=1e-3)
+@click.option("--max-iter", default=1000)
+@click.option("--ftol", default=1e-9)
+@click.option("--distortion", default=1e-3)
 @click.option("--input-dir", default="datasets/fcnet_tabular_benchmarks",
               type=click.Path(file_okay=False, dir_okay=True),
               help="Input data directory.")
@@ -50,7 +51,7 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
          num_iterations, eta, min_budget, max_budget, gamma, num_random_init,
          random_rate, num_restarts, batch_size, num_steps_per_iter, optimizer,
          num_layers, num_units, activation, normalize, method, max_iter, ftol,
-         input_dir, output_dir):
+         distortion, input_dir, output_dir):
 
     Worker, worker_kws = get_worker(benchmark_name, dimensions=dimensions,
                                     dataset_name=dataset_name,
@@ -68,7 +69,7 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
                    optimizer=optimizer, num_layers=num_layers,
                    num_units=num_units, activation=activation,
                    normalize=normalize, method=method, max_iter=max_iter,
-                   ftol=ftol)
+                   ftol=ftol, distortion=distortion)
     with open(output_path.joinpath("options.json"), 'w') as f:
         json.dump(options, f, sort_keys=True, indent=2)
 
@@ -105,6 +106,7 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
                   method=method,
                   max_iter=max_iter,
                   ftol=ftol,
+                  distortion=distortion,
                   seed=run_id,
                   nameserver=ns_host,
                   nameserver_port=ns_port,
