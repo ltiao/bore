@@ -1,5 +1,6 @@
 import sys
 import click
+import yaml
 
 import pandas as pd
 
@@ -10,28 +11,27 @@ from pathlib import Path
 from utils import (GOLDEN_RATIO, WIDTH, size, load_frame, extract_series,
                    merge_stack_series, get_error_mins, sanitize, get_ci)
 
-OUTPUT_DIR = "figures/"
-
 
 @click.command()
 @click.argument("benchmark_name")
-@click.argument("input_dir", default="results",
+@click.argument("input_dir", default="results/",
+                type=click.Path(file_okay=False, dir_okay=True))
+@click.argument("output_dir", default="figures/",
                 type=click.Path(file_okay=False, dir_okay=True))
 @click.option('--num-runs', '-n', default=20)
 @click.option('--methods', '-m', multiple=True)
 @click.option('--ci')
-@click.option('--duration-key', default="info")
+@click.option('--duration-key', default=None)
 @click.option('--context', default="paper")
 @click.option('--style', default="ticks")
 @click.option('--palette', default="muted")
 @click.option('--width', '-w', type=float, default=WIDTH)
 @click.option('--aspect', '-a', type=float, default=GOLDEN_RATIO)
 @click.option('--extension', '-e', multiple=True, default=["png"])
-@click.option("--output-dir", default=OUTPUT_DIR,
-              type=click.Path(file_okay=False, dir_okay=True),
-              help="Output directory.")
-def main(benchmark_name, input_dir, num_runs, methods, ci, duration_key,
-         context, style, palette, width, aspect, extension, output_dir):
+@click.option("--config-file", type=click.File('r'))
+def main(benchmark_name, input_dir, output_dir, num_runs, methods, ci,
+         duration_key, context, style, palette, width, aspect, extension,
+         config_file):
 
     figsize = size(width, aspect)
     height = width / aspect
@@ -48,19 +48,8 @@ def main(benchmark_name, input_dir, num_runs, methods, ci, duration_key,
     output_path = Path(output_dir).joinpath(benchmark_name)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    METHOD_PRETTY_NAMES = {
-        "random": "Random",
-        "tpe": "TPE",
-        "bore": "BORE",
-        "bore-steps-50": "BORE (50 steps)",
-        "bore-steps": "BORE (250 steps)",
-        "boredom": "BOREDOM",
-        "boredom-real": "BORE",
-        "bore-sigmoid-elu-ftol-1e-2-gamma-0.33333333333333333333": "BORE",
-        "boredom-real": "BORE",
-        "bore-logit-elu-ftol-1e-2-gamma-0.33333333333333333333": "BORE",
-        "bore-sigmoid-elu-ftol-1e-9-random-0.1": "BORE"
-    }
+    config = yaml.safe_load(config_file) if config_file else {}
+    method_names_mapping = config.get("names", {})
 
     loss_min = get_error_mins(benchmark_name, input_dir,
                               data_dir="datasets/fcnet_tabular_benchmarks")
@@ -78,28 +67,25 @@ def main(benchmark_name, input_dir, num_runs, methods, ci, duration_key,
             frame = load_frame(path, run, loss_min=loss_min,
                                duration_key=duration_key)
             frames.append(frame.assign(method=method))
-
             series[run] = extract_series(frame, index="elapsed", column="regret")
 
         frame_merged = merge_stack_series(series, y_key="regret")
         frames_merged.append(frame_merged.assign(method=method))
 
     data = pd.concat(frames, axis="index", ignore_index=True, sort=True)
-    data = sanitize(data, mapping=METHOD_PRETTY_NAMES)
+    data = sanitize(data, mapping=method_names_mapping)
 
     data_merged = pd.concat(frames_merged, axis="index", ignore_index=True, sort=True)
-    data_merged = sanitize(data_merged, mapping=METHOD_PRETTY_NAMES)
+    data_merged = sanitize(data_merged, mapping=method_names_mapping)
 
-    print(data_merged)
-
-    hue_order = style_order = list(map(METHOD_PRETTY_NAMES.get, methods))
+    hue_order = style_order = list(map(method_names_mapping.get, methods))
 
     fig, ax = plt.subplots()
     sns.despine(fig=fig, ax=ax, top=True)
 
     sns.lineplot(x="evaluation", y="regret",
                  hue="method",  # hue_order=hue_order,
-                 style="method",  # style_order=style_order,
+                 # style="method",  style_order=style_order,
                  # units="run", estimator=None,
                  ci=get_ci(ci), err_kws=dict(edgecolor='none'),
                  data=data, ax=ax)
@@ -120,7 +106,7 @@ def main(benchmark_name, input_dir, num_runs, methods, ci, duration_key,
 
     sns.lineplot(x="elapsed", y="regret",
                  hue="method",  # hue_order=hue_order,
-                 style="method",  # style_order=style_order,
+                 # style="method", style_order=style_order,
                  # units="run", estimator=None,
                  ci=get_ci(ci), err_kws=dict(edgecolor='none'),
                  data=data_merged, ax=ax)
@@ -155,7 +141,7 @@ def main(benchmark_name, input_dir, num_runs, methods, ci, duration_key,
     # # for ext in extension:
     # #     g.savefig(output_path.joinpath(f"error_vs_iterations_{context}_{suffix}.{ext}"))
 
-    # return 0
+    return 0
 
 
 if __name__ == "__main__":

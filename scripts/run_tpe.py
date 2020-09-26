@@ -2,14 +2,16 @@ import sys
 import click
 import json
 
-import hpbandster.core.nameserver as hpns
-
-from hpbandster.optimizers import BOHB
-
+from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
+from bore.benchmarks import branin
 from pathlib import Path
 
-from bore.utils import dataframe_from_result
-from utils import get_worker, get_name
+from utils import get_worker, get_name, HyperOptLogs
+
+
+def objective(kws):
+
+    return dict(loss=branin(**kws), status=STATUS_OK, info=5)
 
 
 @click.command()
@@ -19,15 +21,6 @@ from utils import get_worker, get_name
 @click.option("--method-name", default="tpe")
 @click.option("--num-runs", "-n", default=20)
 @click.option("--num-iterations", "-i", default=500)
-@click.option("--eta", default=3, help="Successive halving reduction factor.")
-@click.option("--min-budget", default=100)
-@click.option("--max-budget", default=100)
-@click.option("--min-points-in-model", default=10)
-@click.option("--top-n-percent", default=15)
-@click.option("--num-samples", default=64)
-@click.option("--random-fraction", default=1/3)
-@click.option("--bandwidth-factor", default=3)
-@click.option("--min-bandwidth", default=1e-3)
 @click.option("--input-dir", default="datasets/fcnet_tabular_benchmarks",
               type=click.Path(file_okay=False, dir_okay=True),
               help="Input data directory.")
@@ -35,9 +28,7 @@ from utils import get_worker, get_name
               type=click.Path(file_okay=False, dir_okay=True),
               help="Output directory.")
 def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
-         num_iterations, eta, min_budget, max_budget, min_points_in_model,
-         top_n_percent, num_samples, random_fraction, bandwidth_factor,
-         min_bandwidth, input_dir, output_dir):
+         num_iterations, input_dir, output_dir):
 
     Worker, worker_kws = get_worker(benchmark_name, dimensions=dimensions,
                                     dataset_name=dataset_name,
@@ -47,46 +38,22 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
     output_path = Path(output_dir).joinpath(name, method_name)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    options = dict(num_iterations=num_iterations,
-                   eta=eta, min_budget=min_budget, max_budget=max_budget)
+    options = dict(num_iterations=num_iterations)
     with open(output_path.joinpath("options.json"), 'w') as f:
         json.dump(options, f, sort_keys=True, indent=2)
 
+    space = {
+        'x': hp.uniform('x', -5, 10),
+        'y': hp.uniform('y', 0, 15)
+    }
+
     for run_id in range(num_runs):
 
-        NS = hpns.NameServer(run_id=run_id, host='localhost', port=0)
-        ns_host, ns_port = NS.start()
+        trials = Trials()
+        best = fmin(objective, space, algo=tpe.suggest,
+                    max_evals=num_iterations, trials=trials)
 
-        num_workers = 1
-
-        workers = []
-        for worker_id in range(num_workers):
-            w = Worker(nameserver=ns_host, nameserver_port=ns_port,
-                       run_id=run_id, id=worker_id, **worker_kws)
-            w.run(background=True)
-            workers.append(w)
-
-        rs = BOHB(configspace=w.get_config_space(),
-                  run_id=run_id,
-                  eta=eta,
-                  min_budget=min_budget,
-                  max_budget=max_budget,
-                  min_points_in_model=min_points_in_model,
-                  top_n_percent=top_n_percent,
-                  num_samples=num_samples,
-                  random_fraction=random_fraction,
-                  bandwidth_factor=bandwidth_factor,
-                  min_bandwidth=min_bandwidth,
-                  nameserver=ns_host,
-                  nameserver_port=ns_port,
-                  ping_interval=10)
-
-        results = rs.run(num_iterations, min_n_workers=num_workers)
-
-        rs.shutdown(shutdown_workers=True)
-        NS.shutdown()
-
-        data = dataframe_from_result(results)
+        data = HyperOptLogs(trials).to_frame()
         data.to_csv(output_path.joinpath(f"{run_id:03d}.csv"))
 
     return 0

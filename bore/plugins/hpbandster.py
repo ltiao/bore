@@ -4,7 +4,7 @@ import tensorflow as tf
 from tensorflow.keras.losses import BinaryCrossentropy
 import scipy.stats as sps
 
-from ..engine import Ledger, minimize_multi_start, is_duplicate
+from ..engine import Record, minimize_multi_start
 from ..types import DenseConfigurationSpace, DenseConfiguration
 from ..models import DenseSequential
 from ..decorators import unbatch, value_and_gradient, numpy_io
@@ -20,19 +20,21 @@ class BORE(HyperBand):
                  num_restarts=10, batch_size=64, num_steps_per_iter=1000,
                  optimizer="adam", num_layers=2, num_units=32,
                  activation="relu", normalize=True, method="L-BFGS-B",
-                 max_iter=100, ftol=1e-2, distortion=1e-3, seed=None, **kwargs):
+                 max_iter=100, ftol=1e-2, distortion=None, seed=None, **kwargs):
 
         if gamma is None:
             gamma = 1/eta
 
         cg = RatioEstimator(config_space=config_space, gamma=gamma,
-                            num_random_init=num_random_init, random_rate=random_rate,
-                            num_restarts=num_restarts, batch_size=batch_size,
+                            num_random_init=num_random_init,
+                            random_rate=random_rate, num_restarts=num_restarts,
+                            batch_size=batch_size,
                             num_steps_per_iter=num_steps_per_iter,
                             optimizer=optimizer, num_layers=num_layers,
                             num_units=num_units, activation=activation,
                             normalize=normalize, method=method,
-                            max_iter=max_iter, ftol=ftol, distortion=distortion, seed=seed)
+                            max_iter=max_iter, ftol=ftol,
+                            distortion=distortion, seed=seed)
         # (LT): Note this is using the *grandparent* class initializer to
         # replace the config_generator!
         super(HyperBand, self).__init__(config_generator=cg, **kwargs)
@@ -71,7 +73,7 @@ class RatioEstimator(base_config_generator):
                  random_rate=0.25, num_restarts=3, batch_size=64,
                  num_steps_per_iter=1000, optimizer="adam", num_layers=2,
                  num_units=32, activation="relu", normalize=True,
-                 method="L-BFGS-B", max_iter=100, ftol=1e-2, distortion=1e-3,
+                 method="L-BFGS-B", max_iter=100, ftol=1e-2, distortion=None,
                  seed=None, **kwargs):
 
         super(RatioEstimator, self).__init__(**kwargs)
@@ -106,7 +108,7 @@ class RatioEstimator(base_config_generator):
         self.batch_size = batch_size
         self.num_steps_per_iter = num_steps_per_iter
 
-        self.ledger = Ledger()
+        self.record = Record()
 
         self.seed = seed
         self.random_state = np.random.RandomState(seed)
@@ -151,9 +153,9 @@ class RatioEstimator(base_config_generator):
 
     def _update_model(self):
 
-        X, z = self.ledger.load_classification_data(self.gamma)
+        X, z = self.record.load_classification_data(self.gamma)
 
-        dataset_size = self.ledger.size()
+        dataset_size = self.record.size()
         steps_per_epoch = self._get_steps_per_epoch(dataset_size)
         num_epochs = self.num_steps_per_iter // steps_per_epoch
 
@@ -189,8 +191,10 @@ class RatioEstimator(base_config_generator):
                               f" ({res.message})")
 
             # TODO(LT): Create Enum type for these status codes
-            if (res.status == 0 or res.status == 9) and \
-                    not is_duplicate(res.x, self.ledger.features):
+            # status == 1 signifies maximum iteration reached, which we don't
+            # want to treat as a failure condition.
+            if (res.success or res.status == 1) and \
+                    not self.record.is_duplicate(res.x):
                 # if (res_best is not None) *implies* (res.fun < res_best.fun)
                 # (i.e. material implication) is logically equivalent to below
                 if res_best is None or res.fun < res_best.fun:
@@ -200,20 +204,20 @@ class RatioEstimator(base_config_generator):
 
     def get_config(self, budget):
 
-        dataset_size = self.ledger.size()
+        dataset_size = self.record.size()
 
         config_random = self.config_space.sample_configuration()
         config_random_dict = config_random.get_dictionary()
 
         if dataset_size < self.num_random_init:
             self.logger.debug(f"Completed {dataset_size}/{self.num_random_init}"
-                              " initial runs. Returning random candidate...")
+                              " initial runs. Suggesting random candidate...")
             return (config_random_dict, {})
 
         if self.random_state.binomial(p=self.random_rate, n=1):
             self.logger.info("[Glob. maximum: skipped "
                              f"(prob={self.random_rate:.2f})] "
-                             "Returning random candidate ...")
+                             "Suggesting random candidate ...")
             return (config_random_dict, {})
 
         # Update model
@@ -227,10 +231,8 @@ class RatioEstimator(base_config_generator):
             self.logger.warn("[Glob. maximum: not found!] Either optimization "
                              f"failed in all {self.num_restarts} starts, or "
                              "all maxima found have been evaluated previously!"
-                             " Returning random candidate...")
+                             " Suggesting random candidate...")
             return (config_random_dict, {})
-
-        self.logger.info(f"[Glob. maximum: value={-opt.fun:.3f}, x={opt.x}")
 
         loc = opt.x
 
@@ -245,6 +247,9 @@ class RatioEstimator(base_config_generator):
             dist = sps.truncnorm(a=a, b=b, loc=loc, scale=self.distortion)
 
             config_opt_arr = dist.rvs(random_state=self.random_state)
+
+        self.logger.info(f"[Glob. maximum: value={-opt.fun:.3f} x={loc}] "
+                         f"Suggesting x={config_opt_arr}")
 
         config_opt_dict = self._dict_from_array(config_opt_arr)
 
@@ -262,4 +267,4 @@ class RatioEstimator(base_config_generator):
 
         loss = job.result["loss"]
 
-        self.ledger.append(x=config_arr, y=loss, b=budget)
+        self.record.append(x=config_arr, y=loss, b=budget)

@@ -1,6 +1,6 @@
 import sys
 import click
-import json
+import yaml
 import logging
 
 import hpbandster.core.nameserver as hpns
@@ -8,8 +8,7 @@ import hpbandster.core.nameserver as hpns
 from pathlib import Path
 
 from bore.plugins.hpbandster import BORE
-from bore.utils import dataframe_from_result
-from utils import get_worker, get_name
+from utils import get_worker, get_name, HpBandSterLogs
 
 
 logging.basicConfig(level=logging.INFO)
@@ -35,12 +34,12 @@ logging.basicConfig(level=logging.INFO)
 @click.option("--optimizer", default="adam")
 @click.option("--num-layers", default=2)
 @click.option("--num-units", default=32)
-@click.option("--activation", default="elu")
+@click.option("--activation", default="tanh")
 @click.option('--normalize/--no-normalize', default=True)
 @click.option("--method", default="L-BFGS-B")
 @click.option("--max-iter", default=1000)
 @click.option("--ftol", default=1e-9)
-@click.option("--distortion", default=1e-3)
+@click.option("--distortion", default=None, type=float)
 @click.option("--input-dir", default="datasets/fcnet_tabular_benchmarks",
               type=click.Path(file_okay=False, dir_okay=True),
               help="Input data directory.")
@@ -61,8 +60,7 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
     output_path = Path(output_dir).joinpath(name, method_name)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    options = dict(num_iterations=num_iterations,
-                   eta=eta, min_budget=min_budget, max_budget=max_budget,
+    options = dict(eta=eta, min_budget=min_budget, max_budget=max_budget,
                    gamma=gamma, num_random_init=num_random_init,
                    random_rate=random_rate, num_restarts=num_restarts,
                    batch_size=batch_size, num_steps_per_iter=num_steps_per_iter,
@@ -70,8 +68,8 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
                    num_units=num_units, activation=activation,
                    normalize=normalize, method=method, max_iter=max_iter,
                    ftol=ftol, distortion=distortion)
-    with open(output_path.joinpath("options.json"), 'w') as f:
-        json.dump(options, f, sort_keys=True, indent=2)
+    with output_path.joinpath("options.yaml").open('w') as f:
+        yaml.dump(options, f)
 
     for run_id in range(num_runs):
 
@@ -89,35 +87,18 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
 
         rs = BORE(config_space=w.get_config_space(),
                   run_id=run_id,
-                  eta=eta,
-                  min_budget=min_budget,
-                  max_budget=max_budget,
-                  gamma=gamma,
-                  num_random_init=num_random_init,
-                  random_rate=random_rate,
-                  num_restarts=num_restarts,
-                  batch_size=batch_size,
-                  num_steps_per_iter=num_steps_per_iter,
-                  optimizer=optimizer,
-                  num_layers=num_layers,
-                  num_units=num_units,
-                  activation=activation,
-                  normalize=normalize,
-                  method=method,
-                  max_iter=max_iter,
-                  ftol=ftol,
-                  distortion=distortion,
-                  seed=run_id,
                   nameserver=ns_host,
                   nameserver_port=ns_port,
-                  ping_interval=10)
+                  ping_interval=10,
+                  seed=run_id,
+                  **options)
 
         results = rs.run(num_iterations, min_n_workers=num_workers)
 
         rs.shutdown(shutdown_workers=True)
         NS.shutdown()
 
-        data = dataframe_from_result(results)
+        data = HpBandSterLogs(results).to_frame()
         data.to_csv(output_path.joinpath(f"{run_id:03d}.csv"))
 
     return 0

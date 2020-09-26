@@ -103,7 +103,7 @@ def get_error_mins(benchmark_name, input_dir, data_dir=None):
 
 
 def load_frame(path, run, loss_min=None, loss_key="loss", sort_key="finished",
-               duration_key="info"):
+               duration_key=None):
 
     frame = pd.read_csv(path, index_col=0)
 
@@ -112,17 +112,21 @@ def load_frame(path, run, loss_min=None, loss_key="loss", sort_key="finished",
     frame.reset_index(drop=True, inplace=True)
 
     loss = frame[loss_key]
-    duration = frame[duration_key]
-
     best = loss.cummin()
-    elapsed = duration.cumsum()
 
-    target = frame.groupby(by="task").epoch.max()
-    resource = frame.epoch.cumsum()
+    if duration_key is None:
+        elapsed = frame["finished"]
+    else:
+        duration = frame[duration_key]
+        elapsed = duration.cumsum()
 
-    frame = frame.assign(run=run, evaluation=frame.index + 1,
-                         best=best, elapsed=elapsed, target=target,
-                         resource=resource)
+    frame = frame.assign(run=run, evaluation=frame.index + 1, best=best,
+                         elapsed=elapsed)
+
+    if "epoch" in frame.columns:
+        target = frame.groupby(by="task").epoch.max()
+        resource = frame.epoch.cumsum()
+        frame = frame.assign(target=target, resource=resource)
 
     if loss_min is not None:
         error = loss.sub(loss_min).abs()
