@@ -1,17 +1,11 @@
 import sys
 import click
-import json
+import yaml
 
-from hyperopt import fmin, tpe, hp, STATUS_OK, Trials
-from bore.benchmarks import branin
+from hyperopt import fmin, tpe, STATUS_OK, Trials
 from pathlib import Path
 
-from utils import get_worker, get_name, HyperOptLogs
-
-
-def objective(kws):
-
-    return dict(loss=branin(**kws), status=STATUS_OK, info=5)
+from utils import make_name, make_benchmark, HyperOptLogs
 
 
 @click.command()
@@ -30,30 +24,39 @@ def objective(kws):
 def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
          num_iterations, input_dir, output_dir):
 
-    Worker, worker_kws = get_worker(benchmark_name, dimensions=dimensions,
-                                    dataset_name=dataset_name,
-                                    input_dir=input_dir)
-    name = get_name(benchmark_name, dimensions=dimensions, dataset_name=dataset_name)
+    name = make_name(benchmark_name,
+                     dimensions=dimensions,
+                     dataset_name=dataset_name)
 
     output_path = Path(output_dir).joinpath(name, method_name)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    options = dict(num_iterations=num_iterations)
-    with open(output_path.joinpath("options.json"), 'w') as f:
-        json.dump(options, f, sort_keys=True, indent=2)
+    options = dict()
+    with output_path.joinpath("options.yaml").open('w') as f:
+        yaml.dump(options, f)
 
-    space = {
-        'x': hp.uniform('x', -5, 10),
-        'y': hp.uniform('y', 0, 15)
-    }
+    benchmark = make_benchmark(benchmark_name,
+                               dimensions=dimensions,
+                               dataset_name=dataset_name,
+                               input_dir=input_dir)
+    space = benchmark.get_search_space()
+
+    def objective(kws):
+        evaluation = benchmark(kws)
+        return dict(loss=evaluation.loss, status=STATUS_OK,
+                    info=evaluation.duration)
 
     for run_id in range(num_runs):
 
         trials = Trials()
-        best = fmin(objective, space, algo=tpe.suggest,
-                    max_evals=num_iterations, trials=trials)
+        best = fmin(objective,
+                    space=space,
+                    algo=tpe.suggest,
+                    max_evals=num_iterations,
+                    trials=trials)
 
         data = HyperOptLogs(trials).to_frame()
+        print(data)
         data.to_csv(output_path.joinpath(f"{run_id:03d}.csv"))
 
     return 0

@@ -8,7 +8,7 @@ import hpbandster.core.nameserver as hpns
 from pathlib import Path
 
 from bore.plugins.hpbandster import BORE
-from utils import get_worker, get_name, HpBandSterLogs
+from utils import make_name, make_benchmark, BenchmarkWorker, HpBandSterLogs
 
 
 logging.basicConfig(level=logging.INFO)
@@ -52,10 +52,13 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
          num_layers, num_units, activation, normalize, method, max_iter, ftol,
          distortion, input_dir, output_dir):
 
-    Worker, worker_kws = get_worker(benchmark_name, dimensions=dimensions,
-                                    dataset_name=dataset_name,
-                                    input_dir=input_dir)
-    name = get_name(benchmark_name, dimensions=dimensions, dataset_name=dataset_name)
+    benchmark = make_benchmark(benchmark_name,
+                               dimensions=dimensions,
+                               dataset_name=dataset_name,
+                               input_dir=input_dir)
+    name = make_name(benchmark_name,
+                     dimensions=dimensions,
+                     dataset_name=dataset_name)
 
     output_path = Path(output_dir).joinpath(name, method_name)
     output_path.mkdir(parents=True, exist_ok=True)
@@ -80,12 +83,13 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
 
         workers = []
         for worker_id in range(num_workers):
-            w = Worker(nameserver=ns_host, nameserver_port=ns_port,
-                       run_id=run_id, id=worker_id, **worker_kws)
+            w = BenchmarkWorker(benchmark=benchmark, nameserver=ns_host,
+                                nameserver_port=ns_port, run_id=run_id,
+                                id=worker_id)
             w.run(background=True)
             workers.append(w)
 
-        rs = BORE(config_space=w.get_config_space(),
+        rs = BORE(config_space=benchmark.get_config_space(),
                   run_id=run_id,
                   nameserver=ns_host,
                   nameserver_port=ns_port,

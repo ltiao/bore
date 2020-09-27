@@ -1,44 +1,25 @@
 import pandas as pd
 
-from bore.benchmarks import (MichalewiczWorker, StyblinskiTangWorker,
-                             Hartmann3DWorker, Hartmann6DWorker,
-                             BoreholeWorker, FCNetWorker, BraninWorker)
+from hpbandster.core.worker import Worker
+from bore.benchmarks import (Branin, StyblinskiTang, Michalewicz, Hartmann3D,
+                             Hartmann6D, FCNet, FCNetAlt)
 
-workers = dict(
-    # goldstein_price=GoldsteinPriceWorker,
-    michalewicz=MichalewiczWorker,
-    styblinski_tang=StyblinskiTangWorker,
-    branin=BraninWorker,
-    hartmann3d=Hartmann3DWorker,
-    hartmann6d=Hartmann6DWorker,
-    borehole=BoreholeWorker,
-    fcnet=FCNetWorker
+benchmarks = dict(
+    branin=Branin,
+    styblinski_tang=StyblinskiTang,
+    michalewicz=Michalewicz,
+    hartmann3d=Hartmann3D,
+    hartmann6d=Hartmann6D,
+    fcnet=FCNet,
+    fcnet_alt=FCNetAlt
 )
 
 
-def get_worker(benchmark_name, dimensions=None, dataset_name=None,
-               input_dir=None):
+def make_name(benchmark_name, dimensions=None, dataset_name=None):
 
-    Worker = workers.get(benchmark_name)
-
-    kws = {}
-    if benchmark_name == "fcnet":
+    if benchmark_name.startswith("fcnet"):
         assert dataset_name is not None, "must specify dataset name"
-        kws["dataset_name"] = dataset_name
-        kws["data_dir"] = input_dir
-
-    if benchmark_name in ["michalewicz", "styblinski_tang"]:
-        assert dimensions is not None, "must specify dimensions"
-        kws["dim"] = dimensions
-
-    return Worker, kws
-
-
-def get_name(benchmark_name, dimensions=None, dataset_name=None):
-
-    if benchmark_name == "fcnet":
-        assert dataset_name is not None, "must specify dataset name"
-        name = f"{benchmark_name}_{dataset_name}"
+        name = f"fcnet_{dataset_name}"
     elif benchmark_name in ["michalewicz", "styblinski_tang"]:
         assert dimensions is not None, "must specify dimensions"
         name = f"{benchmark_name}_{dimensions:03d}d"
@@ -46,6 +27,36 @@ def get_name(benchmark_name, dimensions=None, dataset_name=None):
         name = benchmark_name
 
     return name
+
+
+def make_benchmark(benchmark_name, dimensions=None, dataset_name=None,
+                   input_dir=None):
+
+    Benchmark = benchmarks[benchmark_name]
+
+    kws = {}
+    if benchmark_name.startswith("fcnet"):
+        assert dataset_name is not None, "must specify dataset name"
+        assert input_dir is not None, "must specify input directory"
+        kws["dataset_name"] = dataset_name
+        kws["data_dir"] = input_dir
+
+    if benchmark_name in ["michalewicz", "styblinski_tang"]:
+        assert dimensions is not None, "must specify dimensions"
+        kws["dimensions"] = dimensions
+
+    return Benchmark(**kws)
+
+
+class BenchmarkWorker(Worker):
+
+    def __init__(self, benchmark, *args, **kwargs):
+        super(BenchmarkWorker, self).__init__(*args, **kwargs)
+        self.benchmark = benchmark
+
+    def compute(self, config, budget, **kwargs):
+        evaluation = self.benchmark(config, budget)
+        return dict(loss=evaluation.loss, info=evaluation.duration)
 
 
 class HpBandSterLogs:
@@ -85,8 +96,7 @@ class HyperOptLogs:
         self.trials = trials
 
     @staticmethod
-    def to_be_named(dct, item):
-
+    def get_value_item(dct, item):
         return {k: v[item] for k, v in dct.items()}
 
     def to_frame(self):
@@ -108,7 +118,7 @@ class HyperOptLogs:
             # loss values, status, and other info
             row.update(trial["result"])
             # hyperparameter values
-            row.update(self.to_be_named(trial["misc"]["vals"], item=0))
+            row.update(self.get_value_item(trial["misc"]["vals"], item=0))
             rows.append(row)
 
         return pd.DataFrame(rows)
