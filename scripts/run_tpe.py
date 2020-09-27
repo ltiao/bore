@@ -43,7 +43,7 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
 
     def objective(kws):
         evaluation = benchmark(kws)
-        return dict(loss=evaluation.loss, status=STATUS_OK,
+        return dict(loss=evaluation.value, status=STATUS_OK,
                     info=evaluation.duration)
 
     for run_id in range(num_runs):
@@ -56,7 +56,6 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
                     trials=trials)
 
         data = HyperOptLogs(trials).to_frame()
-        print(data)
         data.to_csv(output_path.joinpath(f"{run_id:03d}.csv"))
 
     return 0

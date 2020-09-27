@@ -56,7 +56,7 @@ class BenchmarkWorker(Worker):
 
     def compute(self, config, budget, **kwargs):
         evaluation = self.benchmark(config, budget)
-        return dict(loss=evaluation.loss, info=evaluation.duration)
+        return dict(loss=evaluation.value, info=evaluation.duration)
 
 
 class HpBandSterLogs:

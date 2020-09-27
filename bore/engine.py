@@ -1,9 +1,6 @@
 import pandas as pd
 import numpy as np
 
-from scipy.optimize import minimize
-from .optimizers import multi_start
-
 
 # TODO(LT): Extract framework agnostic core enginer code from
 # `plugins.hpbandster` and place it here.
@@ -54,6 +51,3 @@ class Record:
         # evaluation, i.e. is early stopped as soon as anything returns `True`.
         return any(np.allclose(x_prev, x, rtol=rtol, atol=atol)
                    for x_prev in self.features)
-
-
-minimize_multi_start = multi_start(minimizer_fn=minimize)

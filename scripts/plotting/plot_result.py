@@ -85,7 +85,7 @@ def main(benchmark_name, input_dir, output_dir, num_runs, methods, ci,
 
     sns.lineplot(x="evaluation", y="regret",
                  hue="method",  # hue_order=hue_order,
-                 # style="method",  style_order=style_order,
+                 style="method",  # style_order=style_order,
                  # units="run", estimator=None,
                  ci=get_ci(ci), err_kws=dict(edgecolor='none'),
                  data=data, ax=ax)
@@ -106,7 +106,7 @@ def main(benchmark_name, input_dir, output_dir, num_runs, methods, ci,
 
     sns.lineplot(x="elapsed", y="regret",
                  hue="method",  # hue_order=hue_order,
-                 # style="method", style_order=style_order,
+                 style="method",  # style_order=style_order,
                  # units="run", estimator=None,
                  ci=get_ci(ci), err_kws=dict(edgecolor='none'),
                  data=data_merged, ax=ax)

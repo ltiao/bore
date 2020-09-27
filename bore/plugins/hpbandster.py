@@ -2,39 +2,47 @@ import numpy as np
 import tensorflow as tf
 
 from tensorflow.keras.losses import BinaryCrossentropy
-import scipy.stats as sps
+from scipy.optimize import minimize
+from scipy.stats import truncnorm
 
-from ..engine import Record, minimize_multi_start
-from ..types import DenseConfigurationSpace, DenseConfiguration
+from ..engine import Record
 from ..models import DenseSequential
+from ..optimizers import multi_start, random_start
+from ..types import DenseConfigurationSpace, DenseConfiguration
 from ..decorators import unbatch, value_and_gradient, numpy_io
 
 from hpbandster.optimizers.hyperband import HyperBand
 from hpbandster.core.base_config_generator import base_config_generator
 
 
+minimize_multi_start = multi_start(minimizer_fn=minimize)
+minimize_random_start = random_start(minimizer_fn=minimize)
+
+
 class BORE(HyperBand):
 
     def __init__(self, config_space, eta=3, min_budget=0.01, max_budget=1,
                  gamma=None, num_random_init=10, random_rate=0.25,
-                 num_restarts=10, batch_size=64, num_steps_per_iter=1000,
+                 num_start_points=10, batch_size=64, num_steps_per_iter=1000,
                  optimizer="adam", num_layers=2, num_units=32,
                  activation="relu", normalize=True, method="L-BFGS-B",
-                 max_iter=100, ftol=1e-2, distortion=None, seed=None, **kwargs):
+                 max_iter=100, ftol=1e-2, distortion=None, restart=False,
+                 seed=None, **kwargs):
 
         if gamma is None:
             gamma = 1/eta
 
         cg = RatioEstimator(config_space=config_space, gamma=gamma,
                             num_random_init=num_random_init,
-                            random_rate=random_rate, num_restarts=num_restarts,
+                            random_rate=random_rate,
+                            num_start_points=num_start_points,
                             batch_size=batch_size,
                             num_steps_per_iter=num_steps_per_iter,
                             optimizer=optimizer, num_layers=num_layers,
                             num_units=num_units, activation=activation,
                             normalize=normalize, method=method,
                             max_iter=max_iter, ftol=ftol,
-                            distortion=distortion, seed=seed)
+                            distortion=distortion, restart=restart, seed=seed)
         # (LT): Note this is using the *grandparent* class initializer to
         # replace the config_generator!
         super(HyperBand, self).__init__(config_generator=cg, **kwargs)
@@ -70,18 +78,18 @@ class RatioEstimator(base_config_generator):
     class to implement random sampling from a ConfigSpace
     """
     def __init__(self, config_space, gamma=1/3, num_random_init=10,
-                 random_rate=0.25, num_restarts=3, batch_size=64,
+                 random_rate=0.25, num_start_points=3, batch_size=64,
                  num_steps_per_iter=1000, optimizer="adam", num_layers=2,
                  num_units=32, activation="relu", normalize=True,
                  method="L-BFGS-B", max_iter=100, ftol=1e-2, distortion=None,
-                 seed=None, **kwargs):
+                 restart=False, seed=None, **kwargs):
 
         super(RatioEstimator, self).__init__(**kwargs)
 
         assert 0. < gamma < 1., "`gamma` must be in (0, 1)"
         assert 0. <= random_rate < 1., "`random_rate` must be in [0, 1)"
         assert num_random_init > 0
-        assert num_restarts > 0
+        assert num_start_points > 0
 
         self.config_space = DenseConfigurationSpace(config_space, seed=seed)
         self.bounds = self.config_space.get_bounds()
@@ -99,11 +107,12 @@ class RatioEstimator(base_config_generator):
         self.num_random_init = num_random_init
         self.random_rate = random_rate
 
-        self.num_restarts = num_restarts
+        self.num_start_points = num_start_points
         self.method = method
         self.ftol = ftol
         self.max_iter = max_iter
         self.distortion = distortion
+        self.restart = restart
 
         self.batch_size = batch_size
         self.num_steps_per_iter = num_steps_per_iter
@@ -174,10 +183,32 @@ class RatioEstimator(base_config_generator):
     def _get_maximum(self):
 
         self.logger.debug("Beginning multi-start maximization with "
-                          f"{self.num_restarts} starts...")
+                          f"{self.num_start_points} starts...")
+
+        # TODO(LT): a lot of redundant code duplicating and confusing variable
+        # naming here.
+        if not self.restart:
+            res = None
+            i = 0
+            while res is None or not (res.success or res.status == 1) \
+                    or self.record.is_duplicate(res.x):
+                res = minimize_random_start(self.loss, self.bounds,
+                                            num_samples=self.num_start_points,
+                                            method=self.method, jac=True,
+                                            options=dict(maxiter=self.max_iter,
+                                                         ftol=self.ftol),
+                                            random_state=self.random_state)
+
+                self.logger.debug(f"[Maximum {i+1:02d}: value={-res.fun:.3f}] "
+                                  f"success: {res.success}, "
+                                  f"iterations: {res.nit:02d}, "
+                                  f"status: {res.status} ({res.message})")
+                i += 1
+
+            return res
 
         results = minimize_multi_start(self.loss, self.bounds,
-                                       num_restarts=self.num_restarts,
+                                       num_restarts=self.num_start_points,
                                        method=self.method, jac=True,
                                        options=dict(maxiter=self.max_iter,
                                                     ftol=self.ftol),
@@ -185,7 +216,7 @@ class RatioEstimator(base_config_generator):
 
         res_best = None
         for i, res in enumerate(results):
-            self.logger.debug(f"[Maximum {i+1:02d}/{self.num_restarts:02d}: "
+            self.logger.debug(f"[Maximum {i+1:02d}/{self.num_start_points:02d}: "
                               f"value={-res.fun:.3f}] success: {res.success}, "
                               f"iterations: {res.nit:02d}, status: {res.status}"
                               f" ({res.message})")
@@ -229,7 +260,7 @@ class RatioEstimator(base_config_generator):
             # TODO(LT): It's actually important to report what one of these
             # occurred...
             self.logger.warn("[Glob. maximum: not found!] Either optimization "
-                             f"failed in all {self.num_restarts} starts, or "
+                             f"failed in all {self.num_start_points} starts, or "
                              "all maxima found have been evaluated previously!"
                              " Suggesting random candidate...")
             return (config_random_dict, {})
@@ -244,7 +275,7 @@ class RatioEstimator(base_config_generator):
             # dist = multivariate_normal(mean=opt.x, cov=opt.hess_inv.todense())
             a = (self.bounds.lb - loc) / self.distortion
             b = (self.bounds.ub - loc) / self.distortion
-            dist = sps.truncnorm(a=a, b=b, loc=loc, scale=self.distortion)
+            dist = truncnorm(a=a, b=b, loc=loc, scale=self.distortion)
 
             config_opt_arr = dist.rvs(random_state=self.random_state)
 

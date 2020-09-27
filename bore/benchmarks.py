@@ -10,7 +10,7 @@ from tabular_benchmarks import (FCNetProteinStructureBenchmark,
                                 FCNetParkinsonsTelemonitoringBenchmark)
 from .utils import config_space_to_search_space, kwargs_to_config
 
-Evaluation = namedtuple('Evaluation', ['loss', 'duration'])
+Evaluation = namedtuple('Evaluation', ['value', 'duration'])
 
 
 class BenchmarkBase(ABC):
@@ -40,9 +40,9 @@ class Branin(Benchmark):
 
     def __call__(self, kwargs, budget=None):
 
-        loss = self.func(**kwargs, a=self.a, b=self.b, c=self.c, r=self.r,
-                         s=self.s, t=self.t)
-        return Evaluation(loss=loss, duration=None)
+        value = self.func(**kwargs, a=self.a, b=self.b, c=self.c, r=self.r,
+                          s=self.s, t=self.t)
+        return Evaluation(value=value, duration=None)
 
     @staticmethod
     def func(x, y, a, b, c, r, s, t):
@@ -64,7 +64,7 @@ class StyblinskiTang(Benchmark):
 
     def __call__(self, kwargs, budget=None):
         x = np.hstack([kwargs.get(f"x{d}") for d in range(self.dimensions)])
-        return Evaluation(loss=self.func(x), duration=None)
+        return Evaluation(value=self.func(x), duration=None)
 
     @staticmethod
     def func(x):
@@ -86,7 +86,7 @@ class Michalewicz(Benchmark):
 
     def __call__(self, kwargs, budget=None):
         x = np.hstack([kwargs.get(f"x{d}") for d in range(self.dimensions)])
-        return Evaluation(loss=self.func(x, self.m), duration=None)
+        return Evaluation(value=self.func(x, self.m), duration=None)
 
     @staticmethod
     def func(x, m):
@@ -117,7 +117,7 @@ class Hartmann(Benchmark):
 
     def __call__(self, kwargs, budget=None):
         x = np.hstack([kwargs.get(f"x{d}") for d in range(self.dimensions)])
-        return Evaluation(loss=self.func(x, self.A, self.P, self.alpha),
+        return Evaluation(value=self.func(x, self.A, self.P, self.alpha),
                           duration=None)
 
     @staticmethod
@@ -180,7 +180,7 @@ class FCNet(Benchmark):
         cs = self.get_config_space()
         config = kwargs_to_config(kwargs, config_space=cs)
         y, cost = self.benchmark.objective_function(config)
-        return Evaluation(loss=y, duration=cost)
+        return Evaluation(value=y, duration=cost)
 
     def get_config_space(self):
         return self.benchmark.get_configuration_space()
@@ -201,7 +201,7 @@ class FCNetAlt(FCNet):
         c["activation_fn_2"] = kwargs["activation_fn_2"]
         c["lr_schedule"] = kwargs["lr_schedule"]
         y, cost = self.benchmark.objective_function(c, budget=int(budget))
-        return Evaluation(loss=float(y), duration=float(cost))
+        return Evaluation(value=float(y), duration=float(cost))
 
     def get_config_space(self):
         cs = CS.ConfigurationSpace()

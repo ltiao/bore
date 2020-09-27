@@ -13,17 +13,11 @@ from matplotlib.colors import LogNorm
 
 from tqdm import trange
 
-from bore.benchmarks import branin, michalewicz, styblinski_tang
+from bore.benchmarks import Branin, Michalewicz, StyblinskiTang
 from utils import GOLDEN_RATIO, WIDTH, size, load_frame
 
+
 OUTPUT_DIR = "figures/"
-
-
-# def func(x, y):
-#     return styblinski_tang(np.dstack([x, y]))
-
-def func(x, y):
-    return branin(x, y)
 
 
 def contour(X, Y, Z, ax=None, *args, **kwargs):
@@ -81,6 +75,19 @@ def main(benchmark_name, method_name, num_runs, x_key, y_key, x_lim, y_lim,
     input_path = Path(input_dir).joinpath(benchmark_name)
     output_path = Path(output_dir).joinpath(benchmark_name, method_name)
     output_path.mkdir(parents=True, exist_ok=True)
+
+    if benchmark_name == "branin":
+        benchmark = Branin()
+        def func(x, y):
+            return benchmark.func(x, y)
+    elif benchmark_name == "styblinski_tang_002d":
+        benchmark = StyblinskiTang(dimensions=2)
+        def func(x, y):
+            return benchmark.func(np.dstack([x, y]))
+    elif benchmark_name == "michalewicz_002d":
+        benchmark = Michalewicz(dimensions=2)
+        def func(x, y):
+            return benchmark.func(np.dstack([x, y]), m=benchmark.m)
 
     y, x = np.ogrid[y_min:y_max:x_num * 1j, x_min:x_max:y_num * 1j]
     X, Y = np.broadcast_arrays(x, y)

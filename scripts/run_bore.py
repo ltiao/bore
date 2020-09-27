@@ -11,7 +11,7 @@ from bore.plugins.hpbandster import BORE
 from utils import make_name, make_benchmark, BenchmarkWorker, HpBandSterLogs
 
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
 
 @click.command()
@@ -28,7 +28,7 @@ logging.basicConfig(level=logging.INFO)
               help="Quantile, or mixing proportion.")
 @click.option("--num-random-init", default=10)
 @click.option("--random-rate", default=0.1, type=click.FloatRange(0., 1.))
-@click.option("--num-restarts", default=3)
+@click.option("--num-start-points", default=3)
 @click.option("--batch-size", default=64)
 @click.option("--num-steps-per-iter", default=100)
 @click.option("--optimizer", default="adam")
@@ -39,7 +39,8 @@ logging.basicConfig(level=logging.INFO)
 @click.option("--method", default="L-BFGS-B")
 @click.option("--max-iter", default=1000)
 @click.option("--ftol", default=1e-9)
-@click.option("--distortion", default=None, type=float)
+@click.option("--distortion", default=0.05, type=float)
+@click.option('--restart/--no-restart', default=False)
 @click.option("--input-dir", default="datasets/fcnet_tabular_benchmarks",
               type=click.Path(file_okay=False, dir_okay=True),
               help="Input data directory.")
@@ -48,9 +49,9 @@ logging.basicConfig(level=logging.INFO)
               help="Output directory.")
 def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
          num_iterations, eta, min_budget, max_budget, gamma, num_random_init,
-         random_rate, num_restarts, batch_size, num_steps_per_iter, optimizer,
-         num_layers, num_units, activation, normalize, method, max_iter, ftol,
-         distortion, input_dir, output_dir):
+         random_rate, num_start_points, batch_size, num_steps_per_iter,
+         optimizer, num_layers, num_units, activation, normalize, method,
+         max_iter, ftol, distortion, restart, input_dir, output_dir):
 
     benchmark = make_benchmark(benchmark_name,
                                dimensions=dimensions,
@@ -65,12 +66,12 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
 
     options = dict(eta=eta, min_budget=min_budget, max_budget=max_budget,
                    gamma=gamma, num_random_init=num_random_init,
-                   random_rate=random_rate, num_restarts=num_restarts,
+                   random_rate=random_rate, num_start_points=num_start_points,
                    batch_size=batch_size, num_steps_per_iter=num_steps_per_iter,
                    optimizer=optimizer, num_layers=num_layers,
                    num_units=num_units, activation=activation,
                    normalize=normalize, method=method, max_iter=max_iter,
-                   ftol=ftol, distortion=distortion)
+                   ftol=ftol, distortion=distortion, restart=restart)
     with output_path.joinpath("options.yaml").open('w') as f:
         yaml.dump(options, f)
 
