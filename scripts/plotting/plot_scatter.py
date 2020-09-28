@@ -55,7 +55,7 @@ def main(benchmark_name, method_name, variables,
         frame = load_frame(path, run)
 
         scaler = KBinsDiscretizer(n_bins=4, encode="ordinal", strategy="quantile")
-        quartile = 1 + scaler.fit_transform(frame.loss.to_numpy().reshape(-1, 1)).squeeze()
+        quartile = 1 + scaler.fit_transform(frame.evaluation.to_numpy().reshape(-1, 1)).squeeze()
 
         g = sns.pairplot(frame.assign(quartile=quartile), vars=variables,
                          hue="quartile", palette="viridis",

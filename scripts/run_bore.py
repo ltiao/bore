@@ -11,7 +11,7 @@ from bore.plugins.hpbandster import BORE
 from utils import make_name, make_benchmark, BenchmarkWorker, HpBandSterLogs
 
 
-logging.basicConfig(level=logging.DEBUG)
+logging.basicConfig(level=logging.INFO)
 
 
 @click.command()
