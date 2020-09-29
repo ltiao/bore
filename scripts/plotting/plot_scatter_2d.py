@@ -109,7 +109,7 @@ def main(benchmark_name, method_name, num_runs, x_key, y_key, x_lim, y_lim,
                     palette="coolwarm", alpha=0.6,
                     height=height_in / col_wrap, aspect=aspect,
                     kind="scatter", data=data)
-    g.map(contour, X=X, Y=Y, Z=func(X, Y), cmap="Spectral_r", zorder=-1)
+    g.map(contour, X=X, Y=Y, Z=func(X, Y), cmap="turbo", zorder=-1)
 
     for ext in extension:
         g.savefig(output_path.joinpath(f"scatter_{context}_{suffix}.{ext}"))

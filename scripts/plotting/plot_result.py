@@ -63,6 +63,10 @@ def main(benchmark_name, input_dir, output_dir, num_runs, methods, ci,
         for run in range(num_runs):
 
             path = input_path.joinpath(benchmark_name, method, f"{run:03d}.csv")
+            if not path.exists():
+                click.secho(f"File `{path}` does not exist! Continuing...",
+                            fg="yellow")
+                continue
 
             frame = load_frame(path, run, loss_min=loss_min,
                                duration_key=duration_key)
@@ -87,7 +91,8 @@ def main(benchmark_name, input_dir, output_dir, num_runs, methods, ci,
                  hue="method",  # hue_order=hue_order,
                  style="method",  # style_order=style_order,
                  # units="run", estimator=None,
-                 ci=get_ci(ci), err_kws=dict(edgecolor='none'),
+                 ci=get_ci(ci),
+                 err_kws=dict(edgecolor='none'),
                  data=data, ax=ax)
 
     ax.set_xlabel("evaluations")

@@ -18,5 +18,5 @@ sphinx-gallery>=0.7.0
 pillow
 
 GPy==1.9.9
-gpyopt==1.2.6
-hyperopt
+GPyOpt==1.2.6
+hyperopt==0.2.4
