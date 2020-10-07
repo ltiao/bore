@@ -13,7 +13,7 @@ from matplotlib.colors import LogNorm
 
 from tqdm import trange
 
-from bore.benchmarks import Branin, Michalewicz, StyblinskiTang
+from bore.benchmarks import Branin, Michalewicz, StyblinskiTang, GoldsteinPrice, SixHumpCamel
 from utils import GOLDEN_RATIO, WIDTH, size, load_frame
 
 
@@ -36,10 +36,10 @@ def contour(X, Y, Z, ax=None, *args, **kwargs):
 @click.option('--num-runs', '-n', default=20)
 @click.option('--x-key', default='x0')
 @click.option('--y-key', default='x1')
-@click.option('--x-lim', type=(float, float), default=(0., np.pi))
-@click.option('--y-lim', type=(float, float), default=(None, None))
 @click.option('--x-num', default=512)
 @click.option('--y-num', default=512)
+@click.option('--log-error-lim', type=(float, float), default=(-2, 3))
+@click.option('--num-error-levels', default=20)
 @click.option('--context', default="paper")
 @click.option('--col-wrap', default=4)
 @click.option('--style', default="ticks")
@@ -52,18 +52,13 @@ def contour(X, Y, Z, ax=None, *args, **kwargs):
 @click.option("--output-dir", default=OUTPUT_DIR,
               type=click.Path(file_okay=False, dir_okay=True),
               help="Output directory.")
-def main(benchmark_name, method_name, num_runs, x_key, y_key, x_lim, y_lim,
-         x_num, y_num, col_wrap, context, style, palette, width, aspect,
-         extension, input_dir, output_dir):
+def main(benchmark_name, method_name, num_runs, x_key, y_key, x_num, y_num,
+         log_error_lim, num_error_levels, col_wrap, context, style, palette,
+         width, aspect, extension, input_dir, output_dir):
 
     figsize = width_in, height_in = size(width, aspect)
     height = width / aspect
     suffix = f"{width:.0f}x{height:.0f}"
-
-    x_min, x_max = x_lim
-    y_min, y_max = y_lim
-    if y_min is None or y_max is None:
-        y_min, y_max = x_lim
 
     rc = {
         "figure.figsize": figsize,
@@ -79,17 +74,29 @@ def main(benchmark_name, method_name, num_runs, x_key, y_key, x_lim, y_lim,
     if benchmark_name == "branin":
         benchmark = Branin()
         def func(x, y):
-            return benchmark.func(x, y)
+            return benchmark(x, y) - benchmark.get_minimum()
+    elif benchmark_name == "goldstein_price":
+        benchmark = GoldsteinPrice()
+        def func(x, y):
+            return benchmark.func(x, y) - benchmark.get_minimum()
+    elif benchmark_name == "six_hump_camel":
+        benchmark = SixHumpCamel()
+        def func(x, y):
+            return benchmark.func(x, y) - benchmark.get_minimum()
     elif benchmark_name == "styblinski_tang_002d":
         benchmark = StyblinskiTang(dimensions=2)
         def func(x, y):
-            return benchmark.func(np.dstack([x, y]))
+            return benchmark.func(np.dstack([x, y])) - benchmark.get_minimum()
     elif benchmark_name == "michalewicz_002d":
         benchmark = Michalewicz(dimensions=2)
         def func(x, y):
-            return benchmark.func(np.dstack([x, y]), m=benchmark.m)
+            return benchmark.func(np.dstack([x, y]), m=benchmark.m) - benchmark.get_minimum()
 
-    y, x = np.ogrid[y_min:y_max:x_num * 1j, x_min:x_max:y_num * 1j]
+    cs = benchmark.get_config_space()
+    hx = cs.get_hyperparameter(x_key)
+    hy = cs.get_hyperparameter(y_key)
+
+    y, x = np.ogrid[hy.lower:hy.upper:y_num * 1j, hx.lower:hx.upper:x_num * 1j]
     X, Y = np.broadcast_arrays(x, y)
 
     frames = []
@@ -97,19 +104,22 @@ def main(benchmark_name, method_name, num_runs, x_key, y_key, x_lim, y_lim,
 
         path = input_path.joinpath(method_name, f"{run:03d}.csv")
 
-        frame = load_frame(path, run)
+        frame = load_frame(path, run, loss_min=benchmark.get_minimum())
         frames.append(frame.assign(method=method_name))
 
     data = pd.concat(frames, axis="index", ignore_index=True, sort=True)
 
     # TODO: height should actually be `height_in / row_wrap`, but we don't
     # know what `row_wrap` is.
-    g = sns.relplot(x=x_key, y=y_key, hue="evaluation", size="loss",
+    g = sns.relplot(x=x_key, y=y_key, hue="evaluation", size="error",
                     col="run", col_wrap=col_wrap,
-                    palette="coolwarm", alpha=0.6,
+                    palette="cividis_r", alpha=0.8,
                     height=height_in / col_wrap, aspect=aspect,
                     kind="scatter", data=data)
-    g.map(contour, X=X, Y=Y, Z=func(X, Y), cmap="turbo", zorder=-1)
+    g.map(contour, X=X, Y=Y, Z=func(X, Y),
+          levels=np.logspace(*log_error_lim, num_error_levels),
+          norm=LogNorm(),
+          alpha=0.4, cmap="turbo", zorder=-1)
 
     for ext in extension:
         g.savefig(output_path.joinpath(f"scatter_{context}_{suffix}.{ext}"))

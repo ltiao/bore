@@ -8,7 +8,8 @@ from hpbandster.optimizers import BOHB
 
 from pathlib import Path
 
-from utils import make_name, make_benchmark, BenchmarkWorker, HpBandSterLogs
+from bore.benchmarks import make_benchmark
+from utils import make_name, BenchmarkWorker, HpBandSterLogs
 
 
 @click.command()

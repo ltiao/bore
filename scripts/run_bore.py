@@ -8,7 +8,8 @@ import hpbandster.core.nameserver as hpns
 from pathlib import Path
 
 from bore.plugins.hpbandster import BORE
-from utils import make_name, make_benchmark, BenchmarkWorker, HpBandSterLogs
+from bore.benchmarks import make_benchmark
+from utils import make_name, BenchmarkWorker, HpBandSterLogs
 
 
 logging.basicConfig(level=logging.INFO)
@@ -20,6 +21,7 @@ logging.basicConfig(level=logging.INFO)
 @click.option("--dimensions", type=int, help="Dimensions to use for `michalewicz` and `styblinski_tang` benchmarks.")
 @click.option("--method-name", default="bore")
 @click.option("--num-runs", "-n", default=20)
+@click.option("--run-start", default=0)
 @click.option("--num-iterations", "-i", default=500)
 @click.option("--eta", default=3, help="Successive halving reduction factor.")
 @click.option("--min-budget", default=100)
@@ -34,13 +36,13 @@ logging.basicConfig(level=logging.INFO)
 @click.option("--optimizer", default="adam")
 @click.option("--num-layers", default=2)
 @click.option("--num-units", default=32)
-@click.option("--activation", default="tanh")
+@click.option("--activation", default="elu")
 @click.option('--normalize/--no-normalize', default=True)
 @click.option("--method", default="L-BFGS-B")
 @click.option("--max-iter", default=1000)
 @click.option("--ftol", default=1e-9)
-@click.option("--distortion", default=0.05, type=float)
-@click.option('--restart/--no-restart', default=False)
+@click.option("--distortion", default=1e-2, type=float)
+@click.option('--restart/--no-restart', default=True)
 @click.option("--input-dir", default="datasets/fcnet_tabular_benchmarks",
               type=click.Path(file_okay=False, dir_okay=True),
               help="Input data directory.")
@@ -48,7 +50,7 @@ logging.basicConfig(level=logging.INFO)
               type=click.Path(file_okay=False, dir_okay=True),
               help="Output directory.")
 def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
-         num_iterations, eta, min_budget, max_budget, gamma, num_random_init,
+         run_start, num_iterations, eta, min_budget, max_budget, gamma, num_random_init,
          random_rate, num_start_points, batch_size, num_steps_per_iter,
          optimizer, num_layers, num_units, activation, normalize, method,
          max_iter, ftol, distortion, restart, input_dir, output_dir):
@@ -56,7 +58,7 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
     benchmark = make_benchmark(benchmark_name,
                                dimensions=dimensions,
                                dataset_name=dataset_name,
-                               input_dir=input_dir)
+                               data_dir=input_dir)
     name = make_name(benchmark_name,
                      dimensions=dimensions,
                      dataset_name=dataset_name)
@@ -75,7 +77,7 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
     with output_path.joinpath("options.yaml").open('w') as f:
         yaml.dump(options, f)
 
-    for run_id in range(num_runs):
+    for run_id in range(run_start, num_runs):
 
         NS = hpns.NameServer(run_id=run_id, host='localhost', port=0)
         ns_host, ns_port = NS.start()

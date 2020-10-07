@@ -1,6 +1,8 @@
 import numpy as np
 import ConfigSpace as CS
+import yaml
 
+from pathlib import Path
 from collections import namedtuple
 from abc import ABC, abstractmethod
 
@@ -17,6 +19,10 @@ class BenchmarkBase(ABC):
 
     @abstractmethod
     def get_config_space(self):
+        pass
+
+    @abstractmethod
+    def get_minimum(self):
         pass
 
 
@@ -56,6 +62,39 @@ class Branin(Benchmark):
             CS.UniformFloatHyperparameter("y", lower=0, upper=15))
         return cs
 
+    def get_minimum(self):
+        return 0.397887
+
+
+class Ackley(Benchmark):
+
+    def __init__(self, dimensions, a=20, b=0.2, c=2*np.pi):
+        self.dimensions = dimensions
+        self.a = a
+        self.b = b
+        self.c = c
+
+    def __call__(self, kwargs, budget=None):
+        x = np.hstack([kwargs.get(f"x{d}") for d in range(self.dimensions)])
+        value = self.func(x, a=self.a, b=self.b, c=self.c)
+        return Evaluation(value=value, duration=None)
+
+    @staticmethod
+    def func(x, a=20, b=0.2, c=2*np.pi):
+        p = a * np.exp(-b * np.sqrt(np.mean(np.square(x), axis=-1)))
+        q = np.exp(np.mean(np.cos(c*x)))
+        return - p - q + a + np.e
+
+    def get_minimum(self):
+        return 0.
+
+    def get_config_space(self):
+        cs = CS.ConfigurationSpace()
+        for d in range(self.dimensions):
+            cs.add_hyperparameter(
+                CS.UniformFloatHyperparameter(f"x{d}", lower=-32.768, upper=32.768))
+        return cs
+
 
 class StyblinskiTang(Benchmark):
 
@@ -69,6 +108,9 @@ class StyblinskiTang(Benchmark):
     @staticmethod
     def func(x):
         return 0.5 * np.sum(x**4 - 16 * x**2 + 5*x, axis=-1)
+
+    def get_minimum(self):
+        return -39.16599 * self.dimensions
 
     def get_config_space(self):
         cs = CS.ConfigurationSpace()
@@ -96,7 +138,6 @@ class Michalewicz(Benchmark):
         a = np.sin(x)
         b = np.sin(n * x**2 / np.pi)
         b **= 2*m
-
         return - np.sum(a * b, axis=-1)
 
     def get_config_space(self):
@@ -105,6 +146,16 @@ class Michalewicz(Benchmark):
             cs.add_hyperparameter(
                 CS.UniformFloatHyperparameter(f"x{d}", lower=0., upper=np.pi))
         return cs
+
+    def get_minimum(self):
+        minimums = {
+            2: -1.8013,
+            5: -4.687658,
+            10: -9.66015
+        }
+        assert self.dimensions in minimums, \
+            f"global minimum for dimensions={self.dimensions} not known"
+        return minimums[self.dimensions]
 
 
 class Hartmann(Benchmark):
@@ -146,6 +197,9 @@ class Hartmann3D(Hartmann):
                              [381,  5743, 8828]])
         super(Hartmann3D, self).__init__(dimensions=3, A=A, P=P)
 
+    def get_minimum(self):
+        return -3.86278
+
 
 class Hartmann6D(Hartmann):
 
@@ -159,6 +213,9 @@ class Hartmann6D(Hartmann):
                              [2348, 1451, 3522, 2883, 3047, 6650],
                              [4047, 8828, 8732, 5743, 1091,  381]])
         super(Hartmann6D, self).__init__(dimensions=6, A=A, P=P)
+
+    def get_minimum(self):
+        return -3.32237
 
 
 class FCNet(Benchmark):
@@ -174,6 +231,8 @@ class FCNet(Benchmark):
             benchmark = FCNetParkinsonsTelemonitoringBenchmark(data_dir=data_dir)
         else:
             raise ValueError("dataset name not recognized!")
+        self.dataset_name = dataset_name
+        self.data_dir = data_dir
         self.benchmark = benchmark
 
     def __call__(self, kwargs, budget=100):
@@ -184,6 +243,27 @@ class FCNet(Benchmark):
 
     def get_config_space(self):
         return self.benchmark.get_configuration_space()
+
+    def get_minimum(self):
+
+        base_path = Path(self.data_dir).joinpath(self.dataset_name)
+        path = base_path.joinpath("minimum.yaml")
+
+        if path.exists():
+            with path.open('r') as f:
+                val_error_min = yaml.safe_load(f).get("val_error_min")
+        else:
+
+            config_dict, val_error_min, \
+                test_error_min = self.benchmark.get_best_configuration()
+
+            d = dict(config_dict=config_dict,
+                     val_error_min=float(val_error_min),
+                     test_error_min=float(test_error_min))
+
+            with path.open('w') as f:
+                yaml.dump(d, f)
+        return float(val_error_min)
 
 
 class FCNetAlt(FCNet):
@@ -216,13 +296,51 @@ class FCNetAlt(FCNet):
         cs.add_hyperparameter(CS.UniformIntegerHyperparameter("batch_size", lower=0, upper=3))
         return cs
 
-# def goldstein_price(x, y):
 
-#     a = 1 + (x + y + 1)**2 * (19 - 14*x + 3*x**2 - 14*y + 6*x*y + 3*y**2)
-#     b = 30 + (2*x - 3*y)**2 * (18 - 32*x + 12*x**2 - 48*y + 36*x*y + 27*y**2)
+class GoldsteinPrice(Benchmark):
 
-#     return a * b
+    def __call__(self, kwargs, budget=None):
+        value = self.func(**kwargs)
+        return Evaluation(value=value, duration=None)
 
+    @staticmethod
+    def func(x, y):
+        a = 1 + (x + y + 1)**2 * (19 - 14*x + 3*x**2 - 14*y + 6*x*y + 3*y**2)
+        b = 30 + (2*x - 3*y)**2 * (18 - 32*x + 12*x**2 + 48*y - 36*x*y + 27*y**2)
+        return a * b
+
+    def get_config_space(self):
+        cs = CS.ConfigurationSpace()
+        cs.add_hyperparameter(
+            CS.UniformFloatHyperparameter("x", lower=-2., upper=2.))
+        cs.add_hyperparameter(
+            CS.UniformFloatHyperparameter("y", lower=-2., upper=2.))
+        return cs
+
+    def get_minimum(self):
+        return 3
+
+
+class SixHumpCamel(Benchmark):
+
+    def __call__(self, kwargs, budget=None):
+        value = self.func(**kwargs)
+        return Evaluation(value=value, duration=None)
+
+    @staticmethod
+    def func(x, y):
+        return (4 - 2.1 * x**2 + x**4/3) * x**2 + x*y + (-4 + 4 * y**2) * y**2
+
+    def get_config_space(self):
+        cs = CS.ConfigurationSpace()
+        cs.add_hyperparameter(
+            CS.UniformFloatHyperparameter("x", lower=-3., upper=3.))
+        cs.add_hyperparameter(
+            CS.UniformFloatHyperparameter("y", lower=-2., upper=2.))
+        return cs
+
+    def get_minimum(self):
+        return -1.0316
 
 # def borehole(rw, r, Tu, Hu, Tl, Hl, L, Kw):
 
@@ -233,20 +351,6 @@ class FCNetAlt(FCNet):
 #     ret /= g * h
 
 #     return ret
-
-
-# class GoldsteinPriceWorker(Worker):
-
-#     def compute(self, config, budget, **kwargs):
-#         y = goldstein_price(**config)
-#         return dict(loss=y, info=None)
-
-#     @staticmethod
-#     def get_config_space():
-#         cs = CS.ConfigurationSpace()
-#         cs.add_hyperparameter(CS.UniformFloatHyperparameter("x", lower=0, upper=1))
-#         cs.add_hyperparameter(CS.UniformFloatHyperparameter("y", lower=0, upper=1))
-#         return cs
 
 
 # class BoreholeWorker(Worker):
@@ -269,3 +373,35 @@ class FCNetAlt(FCNet):
 #         cs.add_hyperparameter(CS.UniformFloatHyperparameter("L", lower=1120, upper=1680))
 #         cs.add_hyperparameter(CS.UniformFloatHyperparameter("Kw", lower=9855, upper=12045))
 #         return cs
+# -309.5755876604079
+
+benchmarks = dict(
+    branin=Branin,
+    goldstein_price=GoldsteinPrice,
+    six_hump_camel=SixHumpCamel,
+    styblinski_tang=StyblinskiTang,
+    michalewicz=Michalewicz,
+    hartmann3d=Hartmann3D,
+    hartmann6d=Hartmann6D,
+    fcnet=FCNet,
+    fcnet_alt=FCNetAlt
+)
+
+
+def make_benchmark(benchmark_name, dimensions=None, dataset_name=None,
+                   data_dir=None):
+
+    Benchmark = benchmarks[benchmark_name]
+
+    kws = {}
+    if benchmark_name.startswith("fcnet"):
+        assert dataset_name is not None, "must specify dataset name"
+        assert data_dir is not None, "must specify data directory"
+        kws["dataset_name"] = dataset_name
+        kws["data_dir"] = data_dir
+
+    if benchmark_name in ["michalewicz", "styblinski_tang"]:
+        assert dimensions is not None, "must specify dimensions"
+        kws["dimensions"] = dimensions
+
+    return Benchmark(**kws)

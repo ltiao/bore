@@ -21,6 +21,9 @@ from bore.models import DenseSequential
 from bore.datasets import make_classification_dataset
 from utils import GOLDEN_RATIO, WIDTH, size
 
+from sklearn.svm import SVC
+
+
 K.set_floatx("float64")
 
 # shortcuts
@@ -189,8 +192,8 @@ def main(name, context, style, palette, width, aspect, extension, output_dir):
 
     sns.lineplot(x='x', y='y', hue="density", style="kind", data=data, ax=ax)
 
-    sns.rugplot(X_p, height=0.02, c='tab:blue', alpha=0.2, ax=ax)
-    sns.rugplot(X_q, height=0.02, c='tab:orange', alpha=0.2, ax=ax)
+    sns.rugplot(X_p.squeeze(), height=0.02, c='tab:blue', alpha=0.2, ax=ax)
+    sns.rugplot(X_q.squeeze(), height=0.02, c='tab:orange', alpha=0.2, ax=ax)
 
     ax.set_xlabel('$x$')
     ax.set_ylabel('density')
@@ -201,9 +204,11 @@ def main(name, context, style, palette, width, aspect, extension, output_dir):
 
     plt.show()
 
-    r_mlp = MLPDensityRatioEstimator(num_layers=3, num_units=32, activation="elu")
-    r_mlp.compile(optimizer="adam", metrics=["accuracy"])
-    r_mlp.fit(X_p, X_q, epochs=500, batch_size=64)
+    clf = SVC(C=1.0, kernel="rbf", probability=True).fit(X_train, y_train)
+
+    # r_mlp = MLPDensityRatioEstimator(num_layers=3, num_units=32, activation="elu")
+    # r_mlp.compile(optimizer="adam", metrics=["accuracy"])
+    # r_mlp.fit(X_p, X_q, epochs=500, batch_size=64)
 
     # Build DataFrame
     rows = []
@@ -216,11 +221,11 @@ def main(name, context, style, palette, width, aspect, extension, output_dir):
                             .numpy().squeeze(axis=-1),
                  'kind': r"$\textsc{exact}$", r'$\gamma$': r"$\frac{1}{3}$"})
     # cpe
+    # rows.append({'x': X_grid.squeeze(axis=-1),
+    #              'y': r_mlp.ratio(X_grid) * (1 - gamma) / gamma,
+    #              'kind': r"$\textsc{cpe}$", r'$\gamma$': r"$0$"})
     rows.append({'x': X_grid.squeeze(axis=-1),
-                 'y': r_mlp.ratio(X_grid) * (1 - gamma) / gamma,
-                 'kind': r"$\textsc{cpe}$", r'$\gamma$': r"$0$"})
-    rows.append({'x': X_grid.squeeze(axis=-1),
-                 'y': r_mlp.prob(X_grid) / gamma,
+                 'y': clf.predict_proba(X_grid).T[1] / gamma,
                  'kind': r"$\textsc{cpe}$", r'$\gamma$': r"$\frac{1}{3}$"})
     # kde
     rows.append({'x': X_grid.squeeze(axis=-1),

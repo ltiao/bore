@@ -5,7 +5,8 @@ import yaml
 from hyperopt import fmin, tpe, STATUS_OK, Trials
 from pathlib import Path
 
-from utils import make_name, make_benchmark, HyperOptLogs
+from bore.benchmarks import make_benchmark
+from utils import make_name, HyperOptLogs
 
 
 @click.command()
@@ -14,6 +15,7 @@ from utils import make_name, make_benchmark, HyperOptLogs
 @click.option("--dimensions", type=int, help="Dimensions to use for `michalewicz` and `styblinski_tang` benchmarks.")
 @click.option("--method-name", default="tpe")
 @click.option("--num-runs", "-n", default=20)
+@click.option("--run-start", default=0)
 @click.option("--num-iterations", "-i", default=500)
 @click.option("--input-dir", default="datasets/fcnet_tabular_benchmarks",
               type=click.Path(file_okay=False, dir_okay=True),
@@ -22,7 +24,7 @@ from utils import make_name, make_benchmark, HyperOptLogs
               type=click.Path(file_okay=False, dir_okay=True),
               help="Output directory.")
 def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
-         num_iterations, input_dir, output_dir):
+         run_start, num_iterations, input_dir, output_dir):
 
     name = make_name(benchmark_name,
                      dimensions=dimensions,
@@ -46,7 +48,7 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
         return dict(loss=evaluation.value, status=STATUS_OK,
                     info=evaluation.duration)
 
-    for run_id in range(num_runs):
+    for run_id in range(run_start, num_runs):
 
         trials = Trials()
         best = fmin(objective,

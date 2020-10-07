@@ -2,22 +2,11 @@ import numpy as np
 import pandas as pd
 import yaml
 
+from bore.benchmarks import make_benchmark
 from pathlib import Path
-from tabular_benchmarks import (FCNetProteinStructureBenchmark,
-                                FCNetSliceLocalizationBenchmark,
-                                FCNetNavalPropulsionBenchmark,
-                                FCNetParkinsonsTelemonitoringBenchmark)
-
 
 GOLDEN_RATIO = 0.5 * (1 + np.sqrt(5))
 WIDTH = 397.48499
-ERROR_MINS = dict(
-    branin=0.397887,
-    hartmann3d=-3.86278,
-    hartmann6d=-3.32237,
-    borehole=-309.5755876604079,
-    styblinski_tang=-39.16599
-)
 
 
 def pt_to_in(x):
@@ -48,58 +37,25 @@ def get_ci(ci):
     return ci
 
 
-def get_error_mins(benchmark_name, input_dir, data_dir=None):
+def get_loss_min(benchmark_name, data_dir=None):
 
-    base_path = Path(input_dir).joinpath(benchmark_name)
-
+    kws = dict()
     if benchmark_name.startswith("fcnet"):
-
-        path = base_path.joinpath("minimum.yaml")
-
-        if path.exists():
-
-            with path.open('r') as f:
-                val_error_min = yaml.safe_load(f).get("val_error_min")
-
-        else:
-            assert data_dir is not None, "data directory must be specified"
-
-            if benchmark_name.endswith("protein"):
-                benchmark = FCNetProteinStructureBenchmark(data_dir=data_dir)
-            elif benchmark_name.endswith("slice"):
-                benchmark = FCNetSliceLocalizationBenchmark(data_dir=data_dir)
-            elif benchmark_name.endswith("naval"):
-                benchmark = FCNetNavalPropulsionBenchmark(data_dir=data_dir)
-            elif benchmark_name.endswith("parkinsons"):
-                benchmark = FCNetParkinsonsTelemonitoringBenchmark(data_dir=data_dir)
-            else:
-                raise ValueError("dataset name not recognized!")
-
-            config_dict, \
-                val_error_min, test_error_min = benchmark.get_best_configuration()
-
-            d = dict(config_dict=config_dict,
-                     val_error_min=float(val_error_min),
-                     test_error_min=float(test_error_min))
-
-            with path.open('w') as f:
-                yaml.dump(d, f)
-
-        return float(val_error_min)
-
-    if benchmark_name.startswith("styblinski_tang"):
+        benchmark_name, dataset_name = benchmark_name.split('_')
+        kws = dict(dataset_name=dataset_name, data_dir=data_dir)
+    elif benchmark_name.startswith("styblinski_tang") or \
+            benchmark_name.startswith("michalewicz"):
         *head, dimensions_str = benchmark_name.split('_')
+        benchmark_name = '_'.join(head)
         dimensions = int(dimensions_str[:-1])
-        return dimensions * ERROR_MINS.get("styblinski_tang")
+        kws = dict(dimensions=dimensions)
 
-    if benchmark_name.startswith("michalewicz"):
+    benchmark = make_benchmark(benchmark_name, **kws)
+    loss_min = benchmark.get_minimum()
 
-        path = base_path.joinpath("L-BFGS-B", "minimum.yaml")
-        with path.open('r') as f:
-            error_min = yaml.safe_load(f).get('y')
-        return error_min
+    print(loss_min, benchmark_name, kws)
 
-    return ERROR_MINS.get(benchmark_name)
+    return loss_min
 
 
 def load_frame(path, run, loss_min=None, loss_key="loss", sort_key="finished",

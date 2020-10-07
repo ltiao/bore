@@ -1,18 +1,6 @@
 import pandas as pd
 
 from hpbandster.core.worker import Worker
-from bore.benchmarks import (Branin, StyblinskiTang, Michalewicz, Hartmann3D,
-                             Hartmann6D, FCNet, FCNetAlt)
-
-benchmarks = dict(
-    branin=Branin,
-    styblinski_tang=StyblinskiTang,
-    michalewicz=Michalewicz,
-    hartmann3d=Hartmann3D,
-    hartmann6d=Hartmann6D,
-    fcnet=FCNet,
-    fcnet_alt=FCNetAlt
-)
 
 
 def make_name(benchmark_name, dimensions=None, dataset_name=None):
@@ -27,25 +15,6 @@ def make_name(benchmark_name, dimensions=None, dataset_name=None):
         name = benchmark_name
 
     return name
-
-
-def make_benchmark(benchmark_name, dimensions=None, dataset_name=None,
-                   input_dir=None):
-
-    Benchmark = benchmarks[benchmark_name]
-
-    kws = {}
-    if benchmark_name.startswith("fcnet"):
-        assert dataset_name is not None, "must specify dataset name"
-        assert input_dir is not None, "must specify input directory"
-        kws["dataset_name"] = dataset_name
-        kws["data_dir"] = input_dir
-
-    if benchmark_name in ["michalewicz", "styblinski_tang"]:
-        assert dimensions is not None, "must specify dimensions"
-        kws["dimensions"] = dimensions
-
-    return Benchmark(**kws)
 
 
 class BenchmarkWorker(Worker):

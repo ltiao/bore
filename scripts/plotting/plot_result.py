@@ -7,9 +7,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from pathlib import Path
 from utils import (GOLDEN_RATIO, WIDTH, size, load_frame, extract_series,
-                   merge_stack_series, get_error_mins, sanitize, get_ci)
+                   merge_stack_series, get_loss_min, sanitize, get_ci)
+from pathlib import Path
 
 
 @click.command()
@@ -22,6 +22,9 @@ from utils import (GOLDEN_RATIO, WIDTH, size, load_frame, extract_series,
 @click.option('--methods', '-m', multiple=True)
 @click.option('--ci')
 @click.option('--duration-key', default=None)
+@click.option('--legend/--no-legend', default=True)
+@click.option('--ymin', type=float)
+@click.option('--ymax', type=float)
 @click.option('--context', default="paper")
 @click.option('--style', default="ticks")
 @click.option('--palette', default="muted")
@@ -30,8 +33,8 @@ from utils import (GOLDEN_RATIO, WIDTH, size, load_frame, extract_series,
 @click.option('--extension', '-e', multiple=True, default=["png"])
 @click.option("--config-file", type=click.File('r'))
 def main(benchmark_name, input_dir, output_dir, num_runs, methods, ci,
-         duration_key, context, style, palette, width, aspect, extension,
-         config_file):
+         duration_key, legend, ymin, ymax, context, style, palette, width,
+         aspect, extension, config_file):
 
     figsize = size(width, aspect)
     height = width / aspect
@@ -51,8 +54,10 @@ def main(benchmark_name, input_dir, output_dir, num_runs, methods, ci,
     config = yaml.safe_load(config_file) if config_file else {}
     method_names_mapping = config.get("names", {})
 
-    loss_min = get_error_mins(benchmark_name, input_dir,
-                              data_dir="datasets/fcnet_tabular_benchmarks")
+    if legend:
+        legend = "auto"
+
+    loss_min = get_loss_min(benchmark_name, data_dir="datasets/fcnet_tabular_benchmarks")
 
     frames = []
     frames_merged = []
@@ -93,12 +98,13 @@ def main(benchmark_name, input_dir, output_dir, num_runs, methods, ci,
                  # units="run", estimator=None,
                  ci=get_ci(ci),
                  err_kws=dict(edgecolor='none'),
-                 data=data, ax=ax)
+                 legend=legend, data=data, ax=ax)
 
     ax.set_xlabel("evaluations")
-    ax.set_ylabel("simple regret")
+    ax.set_ylabel("immediate regret")
 
     ax.set_yscale("log")
+    ax.set_ylim(ymin, ymax)
 
     for ext in extension:
         fig.savefig(output_path.joinpath(f"regret_iterations_{context}_{suffix}.{ext}"),
@@ -114,7 +120,7 @@ def main(benchmark_name, input_dir, output_dir, num_runs, methods, ci,
                  style="method",  # style_order=style_order,
                  # units="run", estimator=None,
                  ci=get_ci(ci), err_kws=dict(edgecolor='none'),
-                 data=data_merged, ax=ax)
+                 legend=legend, data=data_merged, ax=ax)
 
     ax.set_xlabel("wall-clock time elapsed (s)")
     ax.set_ylabel("simple regret")

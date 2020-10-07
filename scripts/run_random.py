@@ -8,7 +8,8 @@ from hpbandster.optimizers import RandomSearch
 
 from pathlib import Path
 
-from utils import make_name, make_benchmark, BenchmarkWorker, HpBandSterLogs
+from bore.benchmarks import make_benchmark
+from utils import make_name, BenchmarkWorker, HpBandSterLogs
 
 
 @click.command()
@@ -17,6 +18,7 @@ from utils import make_name, make_benchmark, BenchmarkWorker, HpBandSterLogs
 @click.option("--dimensions", type=int, help="Dimensions to use for `michalewicz` and `styblinski_tang` benchmarks.")
 @click.option("--method-name", default="random")
 @click.option("--num-runs", "-n", default=20)
+@click.option("--run-start", default=0)
 @click.option("--num-iterations", "-i", default=500)
 @click.option("--eta", default=3, help="Successive halving reduction factor.")
 @click.option("--min-budget", default=100)
@@ -28,7 +30,7 @@ from utils import make_name, make_benchmark, BenchmarkWorker, HpBandSterLogs
               type=click.Path(file_okay=False, dir_okay=True),
               help="Output directory.")
 def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
-         num_iterations, eta, min_budget, max_budget, input_dir, output_dir):
+         run_start, num_iterations, eta, min_budget, max_budget, input_dir, output_dir):
 
     benchmark = make_benchmark(benchmark_name,
                                dimensions=dimensions,
@@ -45,7 +47,7 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
     with output_path.joinpath("options.yaml").open('w') as f:
         yaml.dump(options, f)
 
-    for run_id in range(num_runs):
+    for run_id in range(run_start, num_runs):
 
         NS = hpns.NameServer(run_id=run_id, host='localhost', port=0)
         ns_host, ns_port = NS.start()
