@@ -9,11 +9,15 @@ from ..engine import Record
 from ..models import DenseSequential
 from ..optimizers import multi_start, random_start
 from ..types import DenseConfigurationSpace, DenseConfiguration
-from ..decorators import unbatch, value_and_gradient, numpy_io
+from ..decorators import unbatch, value_and_gradient, numpy_io, squeeze
 
 from hpbandster.optimizers.hyperband import HyperBand
 from hpbandster.core.base_config_generator import base_config_generator
 
+
+ACTIVATIONS = dict(identity=tf.identity,
+                   sigmoid=tf.sigmoid,
+                   exp=tf.exp)
 
 minimize_multi_start = multi_start(minimizer_fn=minimize)
 minimize_random_start = random_start(minimizer_fn=minimize)
@@ -22,12 +26,12 @@ minimize_random_start = random_start(minimizer_fn=minimize)
 class BORE(HyperBand):
 
     def __init__(self, config_space, eta=3, min_budget=0.01, max_budget=1,
-                 gamma=None, num_random_init=10, random_rate=0.25,
+                 gamma=None, num_random_init=10, random_rate=None,
                  num_start_points=10, batch_size=64, num_steps_per_iter=1000,
                  optimizer="adam", num_layers=2, num_units=32,
-                 activation="relu", normalize=True, method="L-BFGS-B",
-                 max_iter=100, ftol=1e-2, distortion=None, restart=False,
-                 seed=None, **kwargs):
+                 activation="relu", final_activation="sigmoid",
+                 method="L-BFGS-B", max_iter=100, ftol=1e-2, distortion=None,
+                 restart=False, seed=None, **kwargs):
 
         if gamma is None:
             gamma = 1/eta
@@ -35,14 +39,19 @@ class BORE(HyperBand):
         cg = RatioEstimator(config_space=config_space, gamma=gamma,
                             num_random_init=num_random_init,
                             random_rate=random_rate,
-                            num_start_points=num_start_points,
-                            batch_size=batch_size,
-                            num_steps_per_iter=num_steps_per_iter,
-                            optimizer=optimizer, num_layers=num_layers,
-                            num_units=num_units, activation=activation,
-                            normalize=normalize, method=method,
-                            max_iter=max_iter, ftol=ftol,
-                            distortion=distortion, restart=restart, seed=seed)
+                            classifier_kws=dict(num_layers=num_layers,
+                                                num_units=num_units,
+                                                activation=activation,
+                                                optimizer=optimizer),
+                            fit_kws=dict(batch_size=batch_size,
+                                         num_steps_per_iter=num_steps_per_iter),
+                            optimizer_kws=dict(final_activation=final_activation,
+                                               method=method,
+                                               max_iter=max_iter,
+                                               ftol=ftol,
+                                               distortion=distortion,
+                                               num_start_points=num_start_points,
+                                               restart=restart), seed=seed)
         # (LT): Note this is using the *grandparent* class initializer to
         # replace the config_generator!
         super(HyperBand, self).__init__(config_generator=cg, **kwargs)
@@ -77,45 +86,57 @@ class RatioEstimator(base_config_generator):
     """
     class to implement random sampling from a ConfigSpace
     """
-    def __init__(self, config_space, gamma=1/3, num_random_init=10,
-                 random_rate=0.25, num_start_points=3, batch_size=64,
-                 num_steps_per_iter=1000, optimizer="adam", num_layers=2,
-                 num_units=32, activation="relu", normalize=True,
-                 method="L-BFGS-B", max_iter=100, ftol=1e-2, distortion=None,
-                 restart=False, seed=None, **kwargs):
+    def __init__(self, config_space, gamma=1/3, num_random_init=10, random_rate=None,
+                 classifier_kws=dict(num_layers=2,
+                                     num_units=32,
+                                     activation="relu",
+                                     optimizer="adam"),
+                 fit_kws=dict(batch_size=64, num_steps_per_iter=100),
+                 optimizer_kws=dict(final_activation="sigmoid",
+                                    method="L-BFGS-B",
+                                    max_iter=100,
+                                    ftol=1e-2,
+                                    distortion=None,
+                                    num_start_points=3,
+                                    restart=False),
+                 seed=None, **kwargs):
 
         super(RatioEstimator, self).__init__(**kwargs)
 
         assert 0. < gamma < 1., "`gamma` must be in (0, 1)"
-        assert 0. <= random_rate < 1., "`random_rate` must be in [0, 1)"
         assert num_random_init > 0
-        assert num_start_points > 0
-
-        self.config_space = DenseConfigurationSpace(config_space, seed=seed)
-        self.bounds = self.config_space.get_bounds()
-
-        self.logit = self._build_compile_network(num_layers, num_units,
-                                                 activation, optimizer)
-
-        if normalize:
-            final = tf.sigmoid
-        else:
-            final = tf.identity
-        self.loss = self._build_loss(activation=final)
+        assert random_rate is None or 0. <= random_rate < 1., \
+            "`random_rate` must be in [0, 1)"
 
         self.gamma = gamma
         self.num_random_init = num_random_init
         self.random_rate = random_rate
 
-        self.num_start_points = num_start_points
-        self.method = method
-        self.ftol = ftol
-        self.max_iter = max_iter
-        self.distortion = distortion
-        self.restart = restart
+        # Build ConfigSpace with one-hot-encoded categorical inputs and
+        # initialize bounds
+        self.config_space = DenseConfigurationSpace(config_space, seed=seed)
+        self.bounds = self.config_space.get_bounds()
 
-        self.batch_size = batch_size
-        self.num_steps_per_iter = num_steps_per_iter
+        # Build neural network probabilistic classifier
+        self.logit = self._build_compile_network(**classifier_kws)
+
+        # Options for fitting neural network parameters
+        self.batch_size = fit_kws["batch_size"]
+        self.num_steps_per_iter = fit_kws["num_steps_per_iter"]
+
+        # Options for maximizing the acquisition function
+        final_activation = optimizer_kws["final_activation"]
+        assert final_activation in ACTIVATIONS, \
+            f"`activation_final` must be one of {tuple(ACTIVATIONS.keys())}"
+        self.loss = self._build_loss(activation=ACTIVATIONS[final_activation])
+
+        assert optimizer_kws["num_start_points"] > 0
+        self.num_start_points = optimizer_kws["num_start_points"]
+        self.method = optimizer_kws["method"]
+        self.ftol = optimizer_kws["ftol"]
+        self.max_iter = optimizer_kws["max_iter"]
+        self.distortion = optimizer_kws["distortion"]
+        self.restart = optimizer_kws["restart"]
 
         self.record = Record()
 
@@ -153,8 +174,9 @@ class RatioEstimator(base_config_generator):
         minimized through the `scipy.optimize` interface.
         """
         @numpy_io
-        @value_and_gradient
-        @unbatch
+        @value_and_gradient  # (D,) -> () to (D,) -> (), (D,)
+        @squeeze(axis=-1)  # (D,) -> (1,) to (D,) -> ()
+        @unbatch  # (None, D) -> (None, 1) to (D,) -> (1,)
         def loss(x):
             return - activation(self.logit(x))
 
@@ -226,8 +248,6 @@ class RatioEstimator(base_config_generator):
             # want to treat as a failure condition.
             if (res.success or res.status == 1) and \
                     not self.record.is_duplicate(res.x):
-                # if (res_best is not None) *implies* (res.fun < res_best.fun)
-                # (i.e. material implication) is logically equivalent to below
                 if res_best is None or res.fun < res_best.fun:
                     res_best = res
 
@@ -245,7 +265,8 @@ class RatioEstimator(base_config_generator):
                               " initial runs. Suggesting random candidate...")
             return (config_random_dict, {})
 
-        if self.random_state.binomial(p=self.random_rate, n=1):
+        if self.random_rate is not None and \
+                self.random_state.binomial(p=self.random_rate, n=1):
             self.logger.info("[Glob. maximum: skipped "
                              f"(prob={self.random_rate:.2f})] "
                              "Suggesting random candidate ...")

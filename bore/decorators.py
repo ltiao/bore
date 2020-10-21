@@ -21,13 +21,17 @@ def unstack(fn):
     return new_fn
 
 
-def negate(fn):
+def squeeze(axis):
 
-    @wraps(fn)
-    def new_fn(*args, **kwargs):
-        return -fn(*args, **kwargs)
+    def squeeze_dec(fn):
 
-    return new_fn
+        @wraps(fn)
+        def new_fn(*args, **kwargs):
+            return tf.squeeze(fn(*args, **kwargs), axis=axis)
+
+        return new_fn
+
+    return squeeze_dec
 
 
 def unbatch(fn):
@@ -36,7 +40,7 @@ def unbatch(fn):
     def new_fn(input):
         batch_input = tf.expand_dims(input, axis=0)
         batch_output = fn(batch_input)
-        output = tf.squeeze(batch_output)
+        output = tf.squeeze(batch_output, axis=0)
         return output
 
     return new_fn

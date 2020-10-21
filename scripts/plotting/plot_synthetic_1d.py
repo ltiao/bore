@@ -204,11 +204,11 @@ def main(name, context, style, palette, width, aspect, extension, output_dir):
 
     plt.show()
 
-    clf = SVC(C=1.0, kernel="rbf", probability=True).fit(X_train, y_train)
+    # clf = SVC(C=100.0, kernel="rbf", probability=True, tol=1e-9).fit(X_train, y_train)
 
-    # r_mlp = MLPDensityRatioEstimator(num_layers=3, num_units=32, activation="elu")
-    # r_mlp.compile(optimizer="adam", metrics=["accuracy"])
-    # r_mlp.fit(X_p, X_q, epochs=500, batch_size=64)
+    r_mlp = MLPDensityRatioEstimator(num_layers=3, num_units=32, activation="elu")
+    r_mlp.compile(optimizer="adam", metrics=["accuracy"])
+    r_mlp.fit(X_p, X_q, epochs=500, batch_size=64)
 
     # Build DataFrame
     rows = []
@@ -221,11 +221,13 @@ def main(name, context, style, palette, width, aspect, extension, output_dir):
                             .numpy().squeeze(axis=-1),
                  'kind': r"$\textsc{exact}$", r'$\gamma$': r"$\frac{1}{3}$"})
     # cpe
-    # rows.append({'x': X_grid.squeeze(axis=-1),
-    #              'y': r_mlp.ratio(X_grid) * (1 - gamma) / gamma,
-    #              'kind': r"$\textsc{cpe}$", r'$\gamma$': r"$0$"})
     rows.append({'x': X_grid.squeeze(axis=-1),
-                 'y': clf.predict_proba(X_grid).T[1] / gamma,
+                 # 'y': np.exp(- clf.decision_function(X_grid) * clf.probA_ + clf.probB_) * (1 - gamma) / gamma,
+                 'y': r_mlp.ratio(X_grid) * (1 - gamma) / gamma,
+                 'kind': r"$\textsc{cpe}$", r'$\gamma$': r"$0$"})
+    rows.append({'x': X_grid.squeeze(axis=-1),
+                 'y': r_mlp.prob(X_grid) / gamma,
+                 # 'y': clf.predict_proba(X_grid).T[1] / gamma,
                  'kind': r"$\textsc{cpe}$", r'$\gamma$': r"$\frac{1}{3}$"})
     # kde
     rows.append({'x': X_grid.squeeze(axis=-1),

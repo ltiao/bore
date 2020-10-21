@@ -37,7 +37,7 @@ logging.basicConfig(level=logging.INFO)
 @click.option("--num-layers", default=2)
 @click.option("--num-units", default=32)
 @click.option("--activation", default="elu")
-@click.option('--normalize/--no-normalize', default=True)
+@click.option('--final-activation', default="sigmoid")
 @click.option("--method", default="L-BFGS-B")
 @click.option("--max-iter", default=1000)
 @click.option("--ftol", default=1e-9)
@@ -50,10 +50,11 @@ logging.basicConfig(level=logging.INFO)
               type=click.Path(file_okay=False, dir_okay=True),
               help="Output directory.")
 def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
-         run_start, num_iterations, eta, min_budget, max_budget, gamma, num_random_init,
-         random_rate, num_start_points, batch_size, num_steps_per_iter,
-         optimizer, num_layers, num_units, activation, normalize, method,
-         max_iter, ftol, distortion, restart, input_dir, output_dir):
+         run_start, num_iterations, eta, min_budget, max_budget, gamma,
+         num_random_init, random_rate, num_start_points, batch_size,
+         num_steps_per_iter, optimizer, num_layers, num_units, activation,
+         final_activation, method, max_iter, ftol, distortion, restart,
+         input_dir, output_dir):
 
     benchmark = make_benchmark(benchmark_name,
                                dimensions=dimensions,
@@ -72,8 +73,9 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
                    batch_size=batch_size, num_steps_per_iter=num_steps_per_iter,
                    optimizer=optimizer, num_layers=num_layers,
                    num_units=num_units, activation=activation,
-                   normalize=normalize, method=method, max_iter=max_iter,
-                   ftol=ftol, distortion=distortion, restart=restart)
+                   final_activation=final_activation, method=method,
+                   max_iter=max_iter, ftol=ftol, distortion=distortion,
+                   restart=restart)
     with output_path.joinpath("options.yaml").open('w') as f:
         yaml.dump(options, f)
 
