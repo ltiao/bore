@@ -49,5 +49,5 @@ class Record:
         # or locality sensitive hashing (LSH), but these are premature
         # optimizations at this point, especially since the `any` below does lazy
         # evaluation, i.e. is early stopped as soon as anything returns `True`.
-        return any(np.allclose(x_prev, x, rtol=rtol, atol=atol)
+        return any(np.isclose(x_prev, x, rtol=rtol, atol=atol)
                    for x_prev in self.features)
