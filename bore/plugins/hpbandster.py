@@ -272,40 +272,41 @@ class RatioEstimator(base_config_generator):
                              "Suggesting random candidate ...")
             return (config_random_dict, {})
 
-        # Update model
-        self._update_model()
+        # # Update model
+        # self._update_model()
 
-        # Maximize acquisition function
-        opt = self._get_maximum()
-        if opt is None:
-            # TODO(LT): It's actually important to report what one of these
-            # occurred...
-            self.logger.warn("[Glob. maximum: not found!] Either optimization "
-                             f"failed in all {self.num_start_points} starts, or "
-                             "all maxima found have been evaluated previously!"
-                             " Suggesting random candidate...")
-            return (config_random_dict, {})
+        # # Maximize acquisition function
+        # opt = self._get_maximum()
+        # if opt is None:
+        #     # TODO(LT): It's actually important to report what one of these
+        #     # occurred...
+        #     self.logger.warn("[Glob. maximum: not found!] Either optimization "
+        #                      f"failed in all {self.num_start_points} starts, or "
+        #                      "all maxima found have been evaluated previously!"
+        #                      " Suggesting random candidate...")
+        #     return (config_random_dict, {})
 
-        loc = opt.x
+        # loc = opt.x
 
-        if self.distortion is None:
+        # if self.distortion is None:
 
-            config_opt_arr = loc
-        else:
+        #     config_opt_arr = loc
+        # else:
 
-            # dist = multivariate_normal(mean=opt.x, cov=opt.hess_inv.todense())
-            a = (self.bounds.lb - loc) / self.distortion
-            b = (self.bounds.ub - loc) / self.distortion
-            dist = truncnorm(a=a, b=b, loc=loc, scale=self.distortion)
+        #     # dist = multivariate_normal(mean=opt.x, cov=opt.hess_inv.todense())
+        #     a = (self.bounds.lb - loc) / self.distortion
+        #     b = (self.bounds.ub - loc) / self.distortion
+        #     dist = truncnorm(a=a, b=b, loc=loc, scale=self.distortion)
 
-            config_opt_arr = dist.rvs(random_state=self.random_state)
+        #     config_opt_arr = dist.rvs(random_state=self.random_state)
 
-        self.logger.info(f"[Glob. maximum: value={-opt.fun:.3f} x={loc}] "
-                         f"Suggesting x={config_opt_arr}")
+        # self.logger.info(f"[Glob. maximum: value={-opt.fun:.3f} x={loc}] "
+        #                  f"Suggesting x={config_opt_arr}")
 
-        config_opt_dict = self._dict_from_array(config_opt_arr)
+        # config_opt_dict = self._dict_from_array(config_opt_arr)
 
-        return (config_opt_dict, {})
+        # return (config_opt_dict, {})
+        return (config_random_dict, {})
 
     def new_result(self, job, update_model=True):
 
@@ -320,3 +321,14 @@ class RatioEstimator(base_config_generator):
         loss = job.result["loss"]
 
         self.record.append(x=config_arr, y=loss, b=budget)
+
+        print(f"Rungs: {self.record.num_rungs()}, "
+              f"Budgets: {self.record.budgets()}, "
+              f"Rung sizes: {self.record.rung_sizes()}\n"
+              f"Thresholds: {self.record.thresholds(gamma=self.gamma)}, "
+              f"Largest: {self.record.rung_largest(min_size=self.num_random_init)}")
+
+        inputs, targets = self.record.bar()
+        print(inputs.shape, targets.shape)
+        # print(inputs)
+        # print(targets)
