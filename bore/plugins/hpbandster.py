@@ -1,6 +1,9 @@
 import numpy as np
 import tensorflow as tf
 
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import (RNN, LSTM, LSTMCell, RepeatVector, Masking,
+                                     TimeDistributed, Dense)
 from tensorflow.keras.losses import BinaryCrossentropy
 from scipy.optimize import minimize
 from scipy.stats import truncnorm
@@ -160,10 +163,11 @@ class RatioEstimator(base_config_generator):
     @staticmethod
     def _build_compile_network(num_layers, num_units, activation, optimizer):
 
-        network = DenseSequential(output_dim=1,
-                                  num_layers=num_layers,
-                                  num_units=num_units,
-                                  layer_kws=dict(activation=activation))
+        network = Sequential([
+            Masking(mask_value=1e+9),
+            LSTM(units=1, activation=None, return_sequences=True),
+            # LSTM(units=1, return_sequences=True)
+        ])
         network.compile(optimizer=optimizer, metrics=["accuracy"],
                         loss=BinaryCrossentropy(from_logits=True))
         return network
@@ -184,22 +188,16 @@ class RatioEstimator(base_config_generator):
 
     def _update_model(self):
 
-        X, z = self.record.load_classification_data(self.gamma)
+        inputs, targets = self.record.sequences_padded(gamma=self.gamma)
 
-        dataset_size = self.record.size()
-        steps_per_epoch = self._get_steps_per_epoch(dataset_size)
-        num_epochs = self.num_steps_per_iter // steps_per_epoch
-
-        self.logit.fit(X, z, epochs=num_epochs, batch_size=self.batch_size,
-                       verbose=False)  # TODO(LT): Make this an argument
-        loss, accuracy = self.logit.evaluate(X, z, verbose=False)
+        num_epochs = 200
+        self.logit.fit(inputs, targets, epochs=num_epochs,
+                       batch_size=self.batch_size, verbose=True)
+        loss, accuracy = self.logit.evaluate(inputs, targets, verbose=False)
 
         self.logger.info(f"[Model fit: loss={loss:.3f}, "
                          f"accuracy={accuracy:.3f}] "
-                         f"dataset size: {dataset_size}, "
                          f"batch size: {self.batch_size}, "
-                         f"steps per epoch: {steps_per_epoch}, "
-                         f"num steps per iter: {self.num_steps_per_iter}, "
                          f"num epochs: {num_epochs}")
 
     def _get_maximum(self):
@@ -255,14 +253,14 @@ class RatioEstimator(base_config_generator):
 
     def get_config(self, budget):
 
-        dataset_size = self.record.size()
-
         config_random = self.config_space.sample_configuration()
         config_random_dict = config_random.get_dictionary()
 
-        if dataset_size < self.num_random_init:
-            self.logger.debug(f"Completed {dataset_size}/{self.num_random_init}"
-                              " initial runs. Suggesting random candidate...")
+        num_rungs = self.record.num_rungs(min_size=self.num_random_init)
+        if not num_rungs > 0:
+            self.logger.debug("There are no rungs with at least "
+                              f"{self.num_random_init} observations. "
+                              "Suggesting random candidate...")
             return (config_random_dict, {})
 
         if self.random_rate is not None and \
@@ -272,8 +270,8 @@ class RatioEstimator(base_config_generator):
                              "Suggesting random candidate ...")
             return (config_random_dict, {})
 
-        # # Update model
-        # self._update_model()
+        # Update model
+        self._update_model()
 
         # # Maximize acquisition function
         # opt = self._get_maximum()
@@ -322,13 +320,9 @@ class RatioEstimator(base_config_generator):
 
         self.record.append(x=config_arr, y=loss, b=budget)
 
-        print(f"Rungs: {self.record.num_rungs()}, "
-              f"Budgets: {self.record.budgets()}, "
-              f"Rung sizes: {self.record.rung_sizes()}\n"
-              f"Thresholds: {self.record.thresholds(gamma=self.gamma)}, "
-              f"Largest: {self.record.rung_largest(min_size=self.num_random_init)}")
-
-        inputs, targets = self.record.bar()
-        print(inputs.shape, targets.shape)
-        # print(inputs)
-        # print(targets)
+        self.logger.debug(f"[Data] rungs: {self.record.num_rungs()}, "
+                          f"budgets: {self.record.budgets()}, "
+                          f"rung sizes: {self.record.rung_sizes()}")
+        self.logger.debug(f"[Data] largest rung with at least {self.num_random_init} "
+                          f"observations: {self.record.num_rungs(min_size=self.num_random_init)}")
+        self.logger.debug(f"[Data] thresholds: {self.record.thresholds(gamma=self.gamma)}")

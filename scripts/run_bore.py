@@ -12,7 +12,7 @@ from bore.benchmarks import make_benchmark
 from utils import make_name, BenchmarkWorker, HpBandSterLogs
 
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG)
 
 
 @click.command()

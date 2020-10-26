@@ -22,8 +22,12 @@ class Record:
         e.inputs.append(x)
         e.targets.append(y)
 
-    def num_rungs(self):
-        return len(self.rungs)
+    def num_rungs(self, min_size=1):
+        n = 0
+        for t, b in enumerate(sorted(self.rungs)):
+            if self._rung_size_from_budget(b) >= min_size:
+                n = t + 1
+        return n
 
     def budgets(self):
         return sorted(self.rungs.keys())
@@ -48,13 +52,6 @@ class Record:
     def size(self):
         return sum(self.rung_sizes())
 
-    def rung_largest(self, min_size=0):
-        t_largest = 0
-        for t, b in enumerate(sorted(self.rungs)):
-            if self._rung_size_from_budget(b) >= min_size:
-                t_largest = t
-        return t_largest
-
     def _threshold_from_budget(self, b, gamma):
         tau = np.quantile(self.rungs[b].targets, q=gamma)
         return tau
@@ -67,26 +64,66 @@ class Record:
         return [self._threshold_from_budget(b, gamma) for b in self.budgets()]
 
     def _binary_labels_from_budget(self, b, gamma):
-        tau = self._threshold_from_budget(self, b, gamma)
+        tau = self._threshold_from_budget(b, gamma)
         return np.less(self.rungs[b].targets, tau)
 
     def binary_labels(self, t, gamma):
         b = self.budget(t)
         return self._binary_labels_from_budget(b, gamma)
 
-    def sequences(self, gamma=None):
+    def sequences_dict(self, gamma=None):
+        """
+        Create a dictionary of target sequences (lists of target labels of
+        varying length), with the corresponding input (represented by a tuple
+        of floats) as the key.
+
+        Parameters
+        ----------
+        gamma : float, optional
+            If not specified (default), returns sequences of continuous-valued
+            targets. Otherwise, returns *binary* labels indicating whether the
+            value is within the first `gamma`-quantile of all values observed
+            at the same rung.
+
+        Returns
+        -------
+        dict
+            A dictionary of target sequences.
+        """
         sequences = {}
         for b in sorted(self.rungs):
-            if gamma is not None:
-                labels = self._binary_labels_from_budget(b, gamma)
-            for x, y in zip(self.rungs[b].inputs, self.rungs[b].targets):
+            if gamma is None:
+                targets = self.rungs[b].targets
+            else:
+                targets = self._binary_labels_from_budget(b, gamma)
+            for x, y in zip(self.rungs[b].inputs, targets):
                 key = self.get_key(x)
                 ys = sequences.setdefault(key, [])
                 ys.append(y)
         return sequences
 
-    def foo(self, gamma=None):
-        sequences = self.sequences(gamma=gamma)
+    def sequences(self, gamma=None):
+        """
+        Create a pair of lists containing 2-D input and target sequences of
+        shapes ``(t_n, d)`` and ``(t_n, 1)``, respectively, where ``t_n`` is
+        the length of the `n`-th sequence.
+
+        Parameters
+        ----------
+        gamma : float, optional
+            If not specified (default), returns sequences of continuous-valued
+            targets. Otherwise, returns *binary* labels indicating whether the
+            value is within the first `gamma`-quantile of all values observed
+            at the same rung.
+
+        Returns
+        -------
+        input_sequences : list of array_like
+            A list of 2-D input arrays with shapes ``(t_n, d)``.
+        target_sequences : list of array_like
+            A list of 2-D target arrays with shapes ``(t_n, 1)``.
+        """
+        sequences = self.sequences_dict(gamma=gamma)
 
         input_sequences = []
         target_sequences = []
@@ -96,13 +133,38 @@ class Record:
             input_sequences.append(input_sequence)
             target_sequence = np.expand_dims(ys, axis=-1)
             target_sequences.append(target_sequence)
+
         return input_sequences, target_sequences
 
-    def bar(self, gamma=None, pad_value=1e+20):
-        input_sequences, target_sequences = self.foo(gamma=gamma)
+    def sequences_padded(self, gamma=None, pad_value=1e+9):
+        """
+        Create a pair of 3-D arrays of input and target sequences of shapes
+        ``(N, t_max, d)`` and ``(N, t_max, 1)``, respectively, where ``N`` is
+        the number of unique input feature vectors observed so far, and
+        ``t_max = max(t_n for n in N)``.
+
+        Parameters
+        ----------
+        gamma : float, optional
+            If not specified (default), returns sequences of continuous-valued
+            targets. Otherwise, returns *binary* labels indicating whether the
+            value is within the first `gamma`-quantile of all values observed
+            at the same rung.
+        pad_value : float, optional
+            The padding value for undefined entries.
+
+        Returns
+        -------
+        inputs : array_like
+            A 3-D array of padded input sequences with shape ``(N, t_max, d)``.
+        targets : array_like
+            A 3-D array of padded target sequences with shape ``(N, t_max, 1)``.
+        """
+        input_sequences, target_sequences = self.sequences(gamma=gamma)
+        target_dtype = "float64" if gamma is None else "int32"
         return (pad_sequences(input_sequences, dtype="float64",
                               padding="post", value=pad_value),
-                pad_sequences(target_sequences, dtype="float64",
+                pad_sequences(target_sequences, dtype=target_dtype,
                               padding="post", value=pad_value))
 
     # def load_feature_matrix(self, t):
