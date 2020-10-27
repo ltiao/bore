@@ -1,22 +1,19 @@
 import numpy as np
 import tensorflow as tf
-
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import (RNN, LSTM, LSTMCell, RepeatVector, Masking,
-                                     TimeDistributed, Dense)
-from tensorflow.keras.losses import BinaryCrossentropy
+from hpbandster.core.base_config_generator import base_config_generator
+from hpbandster.optimizers.hyperband import HyperBand
 from scipy.optimize import minimize
 from scipy.stats import truncnorm
+from tensorflow.keras.layers import (LSTM, RNN, Dense, LSTMCell, Masking,
+                                     RepeatVector, TimeDistributed)
+from tensorflow.keras.losses import BinaryCrossentropy
+from tensorflow.keras.models import Sequential
 
+from ..decorators import numpy_io, squeeze, unbatch, value_and_gradient
 from ..engine import Record
 from ..models import DenseSequential
 from ..optimizers import multi_start, random_start
-from ..types import DenseConfigurationSpace, DenseConfiguration
-from ..decorators import unbatch, value_and_gradient, numpy_io, squeeze
-
-from hpbandster.optimizers.hyperband import HyperBand
-from hpbandster.core.base_config_generator import base_config_generator
-
+from ..types import DenseConfiguration, DenseConfigurationSpace
 
 ACTIVATIONS = dict(identity=tf.identity,
                    sigmoid=tf.sigmoid,
@@ -42,9 +39,7 @@ class BORE(HyperBand):
         cg = RatioEstimator(config_space=config_space, gamma=gamma,
                             num_random_init=num_random_init,
                             random_rate=random_rate,
-                            classifier_kws=dict(num_layers=num_layers,
-                                                num_units=num_units,
-                                                activation=activation,
+                            classifier_kws=dict(mask_value=1e+9,
                                                 optimizer=optimizer),
                             fit_kws=dict(batch_size=batch_size,
                                          num_steps_per_iter=num_steps_per_iter),
@@ -90,10 +85,7 @@ class RatioEstimator(base_config_generator):
     class to implement random sampling from a ConfigSpace
     """
     def __init__(self, config_space, gamma=1/3, num_random_init=10, random_rate=None,
-                 classifier_kws=dict(num_layers=2,
-                                     num_units=32,
-                                     activation="relu",
-                                     optimizer="adam"),
+                 classifier_kws=dict(mask_value=1e+9, optimizer="adam"),
                  fit_kws=dict(batch_size=64, num_steps_per_iter=100),
                  optimizer_kws=dict(final_activation="sigmoid",
                                     method="L-BFGS-B",
@@ -161,12 +153,12 @@ class RatioEstimator(base_config_generator):
         return steps_per_epoch
 
     @staticmethod
-    def _build_compile_network(num_layers, num_units, activation, optimizer):
+    def _build_compile_network(optimizer, mask_value, **kwargs):
 
         network = Sequential([
-            Masking(mask_value=1e+9),
-            LSTM(units=1, activation=None, return_sequences=True),
-            # LSTM(units=1, return_sequences=True)
+            Masking(mask_value=mask_value),
+            LSTM(units=32, return_sequences=True),
+            TimeDistributed(Dense(1))
         ])
         network.compile(optimizer=optimizer, metrics=["accuracy"],
                         loss=BinaryCrossentropy(from_logits=True))
@@ -190,9 +182,9 @@ class RatioEstimator(base_config_generator):
 
         inputs, targets = self.record.sequences_padded(gamma=self.gamma)
 
-        num_epochs = 200
+        num_epochs = 400
         self.logit.fit(inputs, targets, epochs=num_epochs,
-                       batch_size=self.batch_size, verbose=True)
+                       batch_size=self.batch_size, verbose=False)
         loss, accuracy = self.logit.evaluate(inputs, targets, verbose=False)
 
         self.logger.info(f"[Model fit: loss={loss:.3f}, "

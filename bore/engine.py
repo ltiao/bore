@@ -151,7 +151,9 @@ class Record:
             value is within the first `gamma`-quantile of all values observed
             at the same rung.
         pad_value : float, optional
-            The padding value for undefined entries.
+            The value used to pad undefined entries. It is important to specify
+            a value that is unlikely to appear as an input feature, for example
+            an implausibly small or large value (default 1e+9).
 
         Returns
         -------
@@ -164,6 +166,9 @@ class Record:
         target_dtype = "float64" if gamma is None else "int32"
         return (pad_sequences(input_sequences, dtype="float64",
                               padding="post", value=pad_value),
+                # TODO(LT): We don't strictly need to use `pad_sequences` for
+                # the targets. The fact that we are using it might cause some
+                # confusion...
                 pad_sequences(target_sequences, dtype=target_dtype,
                               padding="post", value=pad_value))
 
@@ -187,7 +192,8 @@ class Record:
     # def is_duplicate(self, x, rtol=1e-5, atol=1e-8):
     #     # Clever ways of doing this would involve data structs. like KD-trees
     #     # or locality sensitive hashing (LSH), but these are premature
-    #     # optimizations at this point, especially since the `any` below does lazy
-    #     # evaluation, i.e. is early stopped as soon as anything returns `True`.
+    #     # optimizations at this point, especially since the `any` below does 
+    #     # lazy evaluation, i.e. is early stopped as soon as anything 
+    #     # returns `True`.
     #     return any(np.isclose(x_prev, x, rtol=rtol, atol=atol)
     #                for x_prev in self.features)
