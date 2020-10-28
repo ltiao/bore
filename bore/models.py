@@ -1,5 +1,6 @@
 from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense
+from tensorflow.keras.layers import (LSTM, RNN, Dense, Input, LSTMCell,
+                                     Masking, RepeatVector, TimeDistributed)
 
 
 class DenseSequential(Sequential):

@@ -128,9 +128,11 @@ class Record:
         input_sequences = []
         target_sequences = []
         for x, ys in sequences.items():
+            # input sequence array from shape (D,) to (t_n, D) by repeating
             xb = np.expand_dims(x, axis=0)  # broadcast `x` before repeating
             input_sequence = np.repeat(xb, repeats=len(ys), axis=0)
             input_sequences.append(input_sequence)
+            # target sequence array from shape (t_n,) to (t_n, 1)
             target_sequence = np.expand_dims(ys, axis=-1)
             target_sequences.append(target_sequence)
 
@@ -189,11 +191,12 @@ class Record:
     #     z = np.less(y, tau)
     #     return X, z
 
-    # def is_duplicate(self, x, rtol=1e-5, atol=1e-8):
-    #     # Clever ways of doing this would involve data structs. like KD-trees
-    #     # or locality sensitive hashing (LSH), but these are premature
-    #     # optimizations at this point, especially since the `any` below does 
-    #     # lazy evaluation, i.e. is early stopped as soon as anything 
-    #     # returns `True`.
-    #     return any(np.isclose(x_prev, x, rtol=rtol, atol=atol)
-    #                for x_prev in self.features)
+    def is_duplicate(self, x, rtol=1e-5, atol=1e-8):
+        # Clever ways of doing this would involve data structs. like KD-trees
+        # or locality sensitive hashing (LSH), but these are premature
+        # optimizations at this point, especially since the `any` below does
+        # lazy evaluation, i.e. is early stopped as soon as anything
+        # returns `True`.
+        # TODO(LT): We only need to look at the lowest rung.
+        return any(np.allclose(x_prev, x, rtol=rtol, atol=atol)
+                   for b in self.rungs for x_prev in self.rungs[b].inputs)
