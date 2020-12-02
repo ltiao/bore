@@ -115,7 +115,8 @@ def main(benchmark_name, method_name, num_runs, x_key, y_key, x_num, y_num,
                     col="run", col_wrap=col_wrap,
                     palette="cividis_r", alpha=0.8,
                     height=height_in / col_wrap, aspect=aspect,
-                    kind="scatter", data=data)
+                    kind="scatter", data=data, rasterized=True)
+                    # facet_kws=dict(subplot_kws=dict(rasterized=True)))
     g.map(contour, X=X, Y=Y, Z=func(X, Y),
           levels=np.logspace(*log_error_lim, num_error_levels),
           norm=LogNorm(),

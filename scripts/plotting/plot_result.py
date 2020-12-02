@@ -7,7 +7,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-from utils import (GOLDEN_RATIO, WIDTH, size, load_frame, extract_series,
+from utils import (GOLDEN_RATIO, WIDTH, pt_to_in, load_frame, extract_series,
                    merge_stack_series, get_loss_min, sanitize, get_ci)
 from pathlib import Path
 
@@ -25,24 +25,32 @@ from pathlib import Path
 @click.option('--legend/--no-legend', default=True)
 @click.option('--ymin', type=float)
 @click.option('--ymax', type=float)
+@click.option('--transparent', is_flag=True)
 @click.option('--context', default="paper")
 @click.option('--style', default="ticks")
 @click.option('--palette', default="muted")
-@click.option('--width', '-w', type=float, default=WIDTH)
+@click.option('--width', '-w', type=float, default=pt_to_in(WIDTH))
+@click.option('--height', '-h', type=float)
 @click.option('--aspect', '-a', type=float, default=GOLDEN_RATIO)
+@click.option('--dpi', type=float)
 @click.option('--extension', '-e', multiple=True, default=["png"])
 @click.option("--config-file", type=click.File('r'))
 def main(benchmark_name, input_dir, output_dir, num_runs, methods, ci,
-         duration_key, legend, ymin, ymax, context, style, palette, width,
-         aspect, extension, config_file):
+         duration_key, legend, ymin, ymax, transparent, context, style, 
+         palette, width, height, aspect, dpi, extension, config_file):
 
-    figsize = size(width, aspect)
-    height = width / aspect
-    suffix = f"{width:.0f}x{height:.0f}"
+    if height is None:
+        height = width / aspect
+    # figsize = size(width, aspect)
+    figsize = (width, height)
+
+    print(figsize)
+
+    suffix = f"{width*dpi:.0f}x{height*dpi:.0f}"
 
     rc = {
         "figure.figsize": figsize,
-        "font.serif": ['Times New Roman'],
+        "font.serif": ["Times New Roman"],
         "text.usetex": True,
     }
     sns.set(context=context, style=style, palette=palette, font="serif", rc=rc)
@@ -106,9 +114,11 @@ def main(benchmark_name, input_dir, output_dir, num_runs, methods, ci,
     ax.set_yscale("log")
     ax.set_ylim(ymin, ymax)
 
+    plt.tight_layout()
+
     for ext in extension:
         fig.savefig(output_path.joinpath(f"regret_iterations_{context}_{suffix}.{ext}"),
-                    bbox_inches="tight")
+                    dpi=dpi, transparent=transparent)
 
     plt.show()
 
@@ -127,9 +137,11 @@ def main(benchmark_name, input_dir, output_dir, num_runs, methods, ci,
 
     ax.set_yscale("log")
 
+    plt.tight_layout()
+
     for ext in extension:
         fig.savefig(output_path.joinpath(f"regret_elapsed_{context}_{suffix}.{ext}"),
-                    bbox_inches="tight")
+                    dpi=dpi, transparent=transparent)
 
     plt.show()
 

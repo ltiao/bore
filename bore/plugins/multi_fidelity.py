@@ -1,28 +1,82 @@
 import numpy as np
-import tensorflow as tf
 
-from tensorflow.keras.losses import BinaryCrossentropy
-from scipy.optimize import minimize
-
-from ..engine import Record, truncated_normal
-from ..models import DenseSequential
-from ..optimizers import multi_start, random_start
-from ..types import DenseConfigurationSpace, DenseConfiguration
-from ..decorators import unbatch, value_and_gradient, numpy_io, squeeze
-
-from hpbandster.optimizers.hyperband import HyperBand
 from hpbandster.core.base_config_generator import base_config_generator
+from hpbandster.optimizers.hyperband import HyperBand
+from scipy.optimize import minimize
+from tensorflow.keras.layers import (LSTM, Dense, Input, Masking, RepeatVector,
+                                     TimeDistributed, RNN, LSTMCell, Activation)
+from tensorflow.keras.losses import BinaryCrossentropy
+from tensorflow.keras.models import Sequential
 
-
-ACTIVATIONS = dict(identity=tf.identity,
-                   sigmoid=tf.sigmoid,
-                   exp=tf.exp)
+from ..decorators import numpy_io, squeeze, unbatch, value_and_gradient
+from ..engine import Record, truncated_normal
+from ..optimizers import multi_start, random_start
+from ..types import DenseConfiguration, DenseConfigurationSpace
 
 minimize_multi_start = multi_start(minimizer_fn=minimize)
 minimize_random_start = random_start(minimizer_fn=minimize)
 
 
-class BORE(HyperBand):
+class StackedRecurrentFactory:
+
+    def __init__(self, input_dim, output_dim, num_layers=2, num_units=32,
+                 layer_kws={}, readout_layer_kws={}):
+
+        # TODO(LT): Support any recurrent cells, e.g. GRUs.
+        # TODO(LT): This implementation cannot take advantage of CuDNN,
+        # since it operates at the layer level, not cell level.
+
+        self.input_dim = input_dim
+
+        assert "return_sequences" not in layer_kws
+        assert "activation" not in readout_layer_kws
+
+        # Initialize stack of recurrent cells
+        self.cells = []
+        for i in range(num_layers):
+            self.cells.append(LSTMCell(num_units, **layer_kws))
+        # Initialize fully-connected readout layer
+        self.readout = Dense(output_dim, **readout_layer_kws)
+
+    def build_many_to_many(self, mask_value=1e+9):
+        # At training time, we use a many-to-many network architecture.
+        # Since the target sequences have varying lengths, we require an
+        # input masking layer.
+        # For numerical stability, we don't explicitly use an sigmoid
+        # output activation. Instead, we rely on the the `from_logits=True`
+        # option in the loss.
+        input_shape = (None, self.input_dim)
+
+        network = Sequential()
+        network.add(Masking(mask_value=mask_value, input_shape=input_shape))
+        for cell in self.cells:
+            network.add(RNN(cell, return_sequences=True))
+        network.add(TimeDistributed(self.readout))
+        return network
+
+    def build_one_to_one(self, num_steps, activation="sigmoid"):
+        # At test time, we only care about the output at some particular step,
+        # hence we use a one-to-one network, with a RepeatVector input layer,
+        # and do not return sequences in the final recurrent layer.
+        # When optimizing this network wrt to inputs, the final activation
+        # can have a large effect on gradient magnitudes and, therefore,
+        # convergence.
+        input_shape = (self.input_dim,)
+        num_layers = len(self.cells)
+
+        network = Sequential()
+        network.add(RepeatVector(num_steps, input_shape=input_shape))
+        for i, cell in enumerate(self.cells):
+            # equivalent to True if not final layer else False
+            return_sequences = (i < num_layers - 1)
+            network.add(RNN(cell, return_sequences=return_sequences))
+        network.add(self.readout)
+        network.add(Activation(activation))
+
+        return network
+
+
+class MultiFiBORE(HyperBand):
 
     def __init__(self, config_space, eta=3, min_budget=0.01, max_budget=1,
                  gamma=None, num_random_init=10, random_rate=None,
@@ -40,8 +94,8 @@ class BORE(HyperBand):
                             random_rate=random_rate,
                             classifier_kws=dict(num_layers=num_layers,
                                                 num_units=num_units,
-                                                activation=activation,
-                                                optimizer=optimizer),
+                                                optimizer=optimizer,
+                                                mask_value=1e+9),
                             fit_kws=dict(batch_size=batch_size,
                                          num_steps_per_iter=num_steps_per_iter),
                             optimizer_kws=dict(final_activation=final_activation,
@@ -81,15 +135,13 @@ class BORE(HyperBand):
         self.config.update(conf)
 
 
-class RatioEstimator(base_config_generator):
+class MultiFiRatioEstimator(base_config_generator):
     """
     class to implement random sampling from a ConfigSpace
     """
     def __init__(self, config_space, gamma=1/3, num_random_init=10, random_rate=None,
-                 classifier_kws=dict(num_layers=2,
-                                     num_units=32,
-                                     activation="relu",
-                                     optimizer="adam"),
+                 classifier_kws=dict(num_layers=2, num_units=32,
+                                     optimizer="adam", mask_value=1e+9),
                  fit_kws=dict(batch_size=64, num_steps_per_iter=100),
                  optimizer_kws=dict(final_activation="sigmoid",
                                     method="L-BFGS-B",
@@ -107,7 +159,6 @@ class RatioEstimator(base_config_generator):
         assert random_rate is None or 0. <= random_rate < 1., \
             "`random_rate` must be in [0, 1)"
 
-        self.gamma = gamma
         self.num_random_init = num_random_init
         self.random_rate = random_rate
 
@@ -118,9 +169,20 @@ class RatioEstimator(base_config_generator):
 
         input_dim = self.config_space.size_dense
 
+        num_layers = classifier_kws["num_layers"]
+        num_units = classifier_kws["num_units"]
+        optimizer = classifier_kws["optimizer"]
+
+        self.mask_value = classifier_kws["mask_value"]
+
+        self.factory = StackedRecurrentFactory(input_dim=input_dim,
+                                               output_dim=1,
+                                               num_layers=num_layers,
+                                               num_units=num_units)
+
         # Build neural network probabilistic classifier
         self.logger.debug("Building and compiling network...")
-        self.logit = self._build_compile_network(input_dim, **classifier_kws)
+        self.logit = self._build_compile_network(optimizer)
         self.logit.summary(print_fn=self.logger.debug)
 
         # Options for fitting neural network parameters
@@ -128,10 +190,10 @@ class RatioEstimator(base_config_generator):
         self.num_steps_per_iter = fit_kws["num_steps_per_iter"]
 
         # Options for maximizing the acquisition function
-        final_activation = optimizer_kws["final_activation"]
-        assert final_activation in ACTIVATIONS, \
-            f"`activation_final` must be one of {tuple(ACTIVATIONS.keys())}"
-        self.loss = self._build_loss(activation=ACTIVATIONS[final_activation])
+        self.final_activation = optimizer_kws["final_activation"]
+        # The (negative) acquitions functions at various rungs.
+        # TODO(LT): the name `losses` is not descriptive and a bit misleading.
+        self.losses = {}
 
         assert optimizer_kws["num_start_points"] > 0
         self.num_start_points = optimizer_kws["num_start_points"]
@@ -141,7 +203,7 @@ class RatioEstimator(base_config_generator):
         self.distortion = optimizer_kws["distortion"]
         self.restart = optimizer_kws["restart"]
 
-        self.record = Record()
+        self.record = Record(gamma=gamma)
 
         self.seed = seed
         self.random_state = np.random.RandomState(seed)
@@ -160,55 +222,55 @@ class RatioEstimator(base_config_generator):
                                                      self.batch_size)))
         return steps_per_epoch
 
-    @staticmethod
-    def _build_compile_network(input_dim, num_layers, num_units, activation, optimizer):
-
-        network = DenseSequential(input_dim=input_dim, output_dim=1,
-                                  num_layers=num_layers,
-                                  num_units=num_units,
-                                  layer_kws=dict(activation=activation))
+    def _build_compile_network(self, optimizer):
+        network = self.factory.build_many_to_many(mask_value=self.mask_value)
         network.compile(optimizer=optimizer, metrics=["accuracy"],
                         loss=BinaryCrossentropy(from_logits=True))
         return network
 
-    def _build_loss(self, activation):
+    def _build_loss(self, rung):
         """
         Returns the loss, i.e. the (negative) acquisition function to be
         minimized through the `scipy.optimize` interface.
         """
+        num_steps = rung + 1  # rungs are zero-based
+        classifier = self.factory.build_one_to_one(num_steps, activation=self.final_activation)
+        # classifier.set_weights(weights=self.logit.get_weights())
+
         @numpy_io
         @value_and_gradient  # (D,) -> () to (D,) -> (), (D,)
         @squeeze(axis=-1)  # (D,) -> (1,) to (D,) -> ()
         @unbatch  # (None, D) -> (None, 1) to (D,) -> (1,)
         def loss(x):
-            return - activation(self.logit(x))
+            return - classifier(x)
 
         return loss
 
     def _update_model(self):
 
-        X, z = self.record.load_classification_data(self.gamma)
+        inputs, targets = self.record.sequences_padded(binary=True, pad_value=self.mask_value)
 
-        dataset_size = self.record.size()
-        steps_per_epoch = self._get_steps_per_epoch(dataset_size)
-        num_epochs = self.num_steps_per_iter // steps_per_epoch
+        self.logger.debug(f"Input sequence shape: {inputs.shape}")
+        self.logger.debug(f"Target sequence shape: {targets.shape}")
 
-        self.logit.fit(X, z, epochs=num_epochs, batch_size=self.batch_size,
-                       verbose=False)  # TODO(LT): Make this an argument
-        loss, accuracy = self.logit.evaluate(X, z, verbose=False)
+        num_epochs = 10
+        self.logit.fit(inputs, targets, epochs=num_epochs,
+                       batch_size=self.batch_size, verbose=False)
+        loss, accuracy = self.logit.evaluate(inputs, targets, verbose=False)
 
         self.logger.info(f"[Model fit: loss={loss:.3f}, "
                          f"accuracy={accuracy:.3f}] "
-                         f"dataset size: {dataset_size}, "
                          f"batch size: {self.batch_size}, "
-                         f"steps per epoch: {steps_per_epoch}, "
-                         f"num steps per iter: {self.num_steps_per_iter}, "
                          f"num epochs: {num_epochs}")
 
-    def _get_maximum(self):
+    def _get_maximum(self, rung):
 
-        self.logger.debug("Beginning multi-start maximization with "
-                          f"{self.num_start_points} starts...")
+        self.logger.debug(f"Beginning multi-start maximization at rung {rung} "
+                          f"with {self.num_start_points} starts...")
+
+        # Negative acquisition functions specific to a rung. These are built
+        # on-the-fly and then cached for subsequent use.
+        loss = self.losses.setdefault(rung, self._build_loss(rung))
 
         # TODO(LT): There is a lot of redundant code duplicating and confusing
         # variable naming here.
@@ -217,7 +279,7 @@ class RatioEstimator(base_config_generator):
             i = 0
             while res is None or not (res.success or res.status == 1) \
                     or self.record.is_duplicate(res.x):
-                res = minimize_random_start(self.loss, self.bounds,
+                res = minimize_random_start(loss, self.bounds,
                                             num_samples=self.num_start_points,
                                             method=self.method, jac=True,
                                             options=dict(maxiter=self.max_iter,
@@ -232,7 +294,7 @@ class RatioEstimator(base_config_generator):
 
             return res
 
-        results = minimize_multi_start(self.loss, self.bounds,
+        results = minimize_multi_start(loss, self.bounds,
                                        num_restarts=self.num_start_points,
                                        method=self.method, jac=True,
                                        options=dict(maxiter=self.max_iter,
@@ -258,8 +320,6 @@ class RatioEstimator(base_config_generator):
 
     def get_config(self, budget):
 
-        dataset_size = self.record.size()
-
         config_random = self.config_space.sample_configuration()
         config_random_dict = config_random.get_dictionary()
 
@@ -271,16 +331,25 @@ class RatioEstimator(base_config_generator):
                              "Suggesting random candidate ...")
             return (config_random_dict, {})
 
-        if dataset_size < self.num_random_init:
-            self.logger.debug(f"Completed {dataset_size}/{self.num_random_init}"
-                              " initial runs. Suggesting random candidate...")
+        # TODO(LT): Should just skip based on number of unique input features
+        # observed so far.
+        # Skip any model-based computation if there simply isn't enough
+        # observed data yet
+        highest = self.record.highest_rung(min_size=self.num_random_init)
+        if highest is None:
+            self.logger.debug("There are no rungs with at least "
+                              f"{self.num_random_init} observations. "
+                              "Suggesting random candidate...")
             return (config_random_dict, {})
+
+        self.logger.debug(f"Rung {highest} is the highest with at least "
+                          f"{self.num_random_init} observations.")
 
         # Update model
         self._update_model()
 
         # Maximize acquisition function
-        opt = self._get_maximum()
+        opt = self._get_maximum(highest)
         if opt is None:
             # TODO(LT): It's actually important to report which of these
             # failures occurred...
@@ -321,3 +390,13 @@ class RatioEstimator(base_config_generator):
         loss = job.result["loss"]
 
         self.record.append(x=config_arr, y=loss, b=budget)
+
+        self.logger.debug(f"[Data] rungs: {self.record.num_rungs()}, "
+                          f"budgets: {self.record.budgets()}, "
+                          f"rung sizes: {self.record.rung_sizes()}")
+        self.logger.debug(f"[Data] thresholds: {self.record.thresholds()}")
+
+        X = self.record.test()
+        X_uniq, X_counts = np.unique(X, return_counts=True, axis=0)
+        self.logger.debug(f"[Data] Input feature occurrences: {X_counts}")
+        self.logger.debug(X_uniq)
