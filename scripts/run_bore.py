@@ -41,7 +41,7 @@ logging.basicConfig(level=logging.DEBUG)
 @click.option("--method", default="L-BFGS-B")
 @click.option("--max-iter", default=1000)
 @click.option("--ftol", default=1e-9)
-@click.option("--distortion", default=1e-2, type=float)
+@click.option("--distortion", default=None, type=float)
 @click.option('--restart/--no-restart', default=True)
 @click.option("--input-dir", default="datasets/fcnet_tabular_benchmarks",
               type=click.Path(file_okay=False, dir_okay=True),

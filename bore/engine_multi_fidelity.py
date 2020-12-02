@@ -1,6 +1,7 @@
 import numpy as np
 
 from tensorflow.keras.preprocessing.sequence import pad_sequences
+from scipy.stats import truncnorm
 from collections import namedtuple
 
 # TODO(LT): Extract framework agnostic core enginer code from
@@ -8,10 +9,17 @@ from collections import namedtuple
 Evaluations = namedtuple('Evaluations', ["targets", "inputs"])
 
 
+def truncated_normal(loc, scale, lower, upper):
+    a = (lower - loc) / scale
+    b = (upper - loc) / scale
+    return truncnorm(a=a, b=b, loc=loc, scale=scale)
+
+
 class Record:
 
-    def __init__(self):
+    def __init__(self, gamma=None):
         self.rungs = {}
+        self.gamma = gamma
 
     @staticmethod
     def get_key(x):
@@ -22,12 +30,47 @@ class Record:
         e.inputs.append(x)
         e.targets.append(y)
 
-    def num_rungs(self, min_size=1):
-        n = 0
+    def test(self):
+
+        inputs = []
+        for b in self.rungs:
+            inputs.extend(self.rungs[b].inputs)
+        return np.vstack(inputs)
+
+    def num_rungs(self):
+        """
+        Get the total number of rungs recorded.
+
+        Returns
+        -------
+        int
+            Total number of rungs recorded.
+        """
+        return len(self.rungs)
+
+    def highest_rung(self, min_size=1):
+        """
+        Get the highest rung attained so far that has recorded at least some
+        given number of evaluations.
+
+        Parameters
+        ----------
+        min_size : int, optional
+            Minimum number of evaluations observed at a rung (default: 1).
+
+        Returns
+        -------
+        int
+            The highest rung with at least ``min_size`` observations.
+        """
+        # Equivalent to:
+        # max(filter(lambda u: self._rung_size_from_budget(u[1]) >= min_size,
+        #            enumerate(sorted(self.rungs))), default=None)
+        t_max = None
         for t, b in enumerate(sorted(self.rungs)):
             if self._rung_size_from_budget(b) >= min_size:
-                n = t + 1
-        return n
+                t_max = t
+        return t_max
 
     def budgets(self):
         return sorted(self.rungs.keys())
@@ -52,26 +95,26 @@ class Record:
     def size(self):
         return sum(self.rung_sizes())
 
-    def _threshold_from_budget(self, b, gamma):
-        tau = np.quantile(self.rungs[b].targets, q=gamma)
+    def _threshold_from_budget(self, b):
+        tau = np.quantile(self.rungs[b].targets, q=self.gamma)
         return tau
 
-    def threshold(self, t, gamma):
+    def threshold(self, t):
         b = self.budget(t)
-        return self._threshold_from_budget(b, gamma)
+        return self._threshold_from_budget(b)
 
-    def thresholds(self, gamma):
-        return [self._threshold_from_budget(b, gamma) for b in self.budgets()]
+    def thresholds(self):
+        return [self._threshold_from_budget(b) for b in self.budgets()]
 
-    def _binary_labels_from_budget(self, b, gamma):
-        tau = self._threshold_from_budget(b, gamma)
+    def _binary_labels_from_budget(self, b):
+        tau = self._threshold_from_budget(b)
         return np.less(self.rungs[b].targets, tau)
 
-    def binary_labels(self, t, gamma):
+    def binary_labels(self, t):
         b = self.budget(t)
-        return self._binary_labels_from_budget(b, gamma)
+        return self._binary_labels_from_budget(b)
 
-    def sequences_dict(self, gamma=None):
+    def sequences_dict(self, binary=True):
         """
         Create a dictionary of target sequences (lists of target labels of
         varying length), with the corresponding input (represented by a tuple
@@ -90,19 +133,30 @@ class Record:
         dict
             A dictionary of target sequences.
         """
+        assert not binary or self.gamma is not None, \
+            "Must instantiate with `gamma` specified for binary labels!"
+
         sequences = {}
         for b in sorted(self.rungs):
-            if gamma is None:
-                targets = self.rungs[b].targets
+
+            if binary:
+                targets = self._binary_labels_from_budget(b)
             else:
-                targets = self._binary_labels_from_budget(b, gamma)
+                targets = self.rungs[b].targets
+
             for x, y in zip(self.rungs[b].inputs, targets):
                 key = self.get_key(x)
                 ys = sequences.setdefault(key, [])
                 ys.append(y)
+
+                assert len(ys) <= self.num_rungs(), \
+                    (f"Sequence length is {len(ys)} but we've only observed "
+                     f"data for {self.num_rungs()} rung(s). "
+                     "There must be duplicate input feature vectors!")
+
         return sequences
 
-    def sequences(self, gamma=None):
+    def sequences(self, binary=True):
         """
         Create a pair of lists containing 2-D input and target sequences of
         shapes ``(t_n, d)`` and ``(t_n, 1)``, respectively, where ``t_n`` is
@@ -123,7 +177,7 @@ class Record:
         target_sequences : list of array_like
             A list of 2-D target arrays with shapes ``(t_n, 1)``.
         """
-        sequences = self.sequences_dict(gamma=gamma)
+        sequences = self.sequences_dict(binary=binary)
 
         input_sequences = []
         target_sequences = []
@@ -138,7 +192,7 @@ class Record:
 
         return input_sequences, target_sequences
 
-    def sequences_padded(self, gamma=None, pad_value=1e+9):
+    def sequences_padded(self, pad_value=1e+9, binary=True):
         """
         Create a pair of 3-D arrays of input and target sequences of shapes
         ``(N, t_max, d)`` and ``(N, t_max, 1)``, respectively, where ``N`` is
@@ -164,8 +218,8 @@ class Record:
         targets : array_like
             A 3-D array of padded target sequences with shape ``(N, t_max, 1)``.
         """
-        input_sequences, target_sequences = self.sequences(gamma=gamma)
-        target_dtype = "float64" if gamma is None else "int32"
+        input_sequences, target_sequences = self.sequences(binary=binary)
+        target_dtype = "int32" if binary else "float64"
         return (pad_sequences(input_sequences, dtype="float64",
                               padding="post", value=pad_value),
                 # TODO(LT): We don't strictly need to use `pad_sequences` for

@@ -2,6 +2,7 @@ import sys
 import click
 
 import numpy as np
+import pandas as pd
 
 import tensorflow as tf
 import tensorflow_probability as tfp
@@ -27,7 +28,7 @@ from sklearn.utils import check_random_state
 
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
-from utils import GOLDEN_RATIO, WIDTH, size
+from utils import GOLDEN_RATIO, WIDTH, pt_to_in
 
 # shortcuts
 tfd = tfp.distributions
@@ -72,44 +73,48 @@ def relative(ratio_inverse, gamma):
 
 @click.command()
 @click.argument("name")
-@click.option('--width', '-w', type=float, default=WIDTH)
-@click.option('--aspect', '-a', type=float, default=GOLDEN_RATIO)
-@click.option('--extension', '-e', multiple=True, default=["png"])
+@click.option('--gamma', '-g', type=float, default=1/3)
 @click.option("--output-dir", default=OUTPUT_DIR,
               type=click.Path(file_okay=False, dir_okay=True),
               help="Output directory.")
-def main(name, width, aspect, extension, output_dir):
+@click.option('--transparent', is_flag=True)
+@click.option('--context', default="paper")
+@click.option('--style', default="ticks")
+@click.option('--palette', default="deep")
+@click.option('--width', '-w', type=float, default=pt_to_in(WIDTH))
+@click.option('--height', '-h', type=float)
+@click.option('--aspect', '-a', type=float, default=GOLDEN_RATIO)
+@click.option('--dpi', type=float)
+@click.option('--extension', '-e', multiple=True, default=["png"])
+@click.option("--seed", default=8888)
+def main(name, gamma, output_dir, transparent, context, style, palette, width,
+         height, aspect, dpi, extension, seed):
 
     num_features = 1
     num_init_random = 27
     noise_variance = 0.2
-    gamma = 1/3
     bandwidth = 0.25
 
     num_index_points = 512
     x_min, x_max = -1.0, 2.0
 
-    seed = 8888  # set random seed for reproducibility
-    random_state = np.random.RandomState(seed)
-
-    # preamble
-    figsize = size(width, aspect)
-    suffix = f"{width:.0f}x{width/aspect:.0f}"
+    if height is None:
+        height = width / aspect
+    # figsize = size(width, aspect)
+    figsize = (width, height)
+    suffix = f"{width*dpi:.0f}x{height*dpi:.0f}"
 
     rc = {
         "figure.figsize": figsize,
         "font.serif": ["Times New Roman"],
         "text.usetex": True,
     }
-
-    sns.set(context="paper",
-            style="ticks",
-            palette="colorblind",
-            font="serif",
-            rc=rc)
+    sns.set(context=context, style=style, palette=palette, font="serif", rc=rc)
 
     output_path = Path(output_dir).joinpath(name)
     output_path.mkdir(parents=True, exist_ok=True)
+
+    random_state = np.random.RandomState(seed)
     # /preamble
 
     X = np.linspace(x_min, x_max, num_index_points).reshape(-1, num_features)
@@ -123,9 +128,11 @@ def main(name, width, aspect, extension, output_dir):
     ax.set_xlabel(r'$x$')
     ax.set_ylabel(r"$y$ (test mse)")
 
+    plt.tight_layout()
+
     for ext in extension:
-        fig.savefig(output_path.joinpath(f"objective_{suffix}.{ext}"),
-                    bbox_inches="tight")
+        fig.savefig(output_path.joinpath(f"objective_{suffix}.{ext}"), dpi=dpi,
+                    transparent=transparent)
 
     plt.show()
     # %%
@@ -148,26 +155,22 @@ def main(name, width, aspect, extension, output_dir):
     y_samples_g = y_samples[mask_g]
 
     # %%
-
     fig, ax = plt.subplots()
 
-    ax.plot(X, y)
+    ax.plot(X, y, color="tab:gray", label="latent function")
+    ax.scatter(X_samples, y_samples, marker='x', color='k',
+               label="noisy observations")
 
-    # ax.scatter(log_gamma_samples, y_samples, c=mask_lesser,
-    #            alpha=0.7, cmap="coolwarm")
-    ax.scatter(X_samples_l, y_samples_l, alpha=0.8)
-    ax.scatter(X_samples_g, y_samples_g, alpha=0.8)
+    ax.set_xlabel(r"$x$")
+    ax.set_ylabel(r"$y$")
 
-    ax.axhline(tau, xmin=0., xmax=1.,
-               color='k', linewidth=1., linestyle='dashed')
+    ax.legend()
 
-    # ax.set_xscale("log")
-    ax.set_xlabel(r'$x$')
-    ax.set_ylabel(r"$y$ (test mse)")
+    plt.tight_layout()
 
     for ext in extension:
-        fig.savefig(output_path.joinpath(f"candidates_{suffix}.{ext}"),
-                    bbox_inches="tight")
+        fig.savefig(output_path.joinpath(f"observations_{suffix}.{ext}"),
+                    dpi=dpi, transparent=transparent)
 
     plt.show()
     # %%
@@ -184,9 +187,58 @@ def main(name, width, aspect, extension, output_dir):
     ax.set_xlabel(r'$y$')
     ax.set_ylabel(r'$\Phi(y)$')
 
+    plt.tight_layout()
+
     for ext in extension:
-        fig.savefig(output_path.joinpath(f"ecdf_{suffix}.{ext}"),
-                    bbox_inches="tight")
+        fig.savefig(output_path.joinpath(f"ecdf_{suffix}.{ext}"), dpi=dpi,
+                    transparent=transparent)
+
+    plt.show()
+    # %%
+
+    fig, ax = plt.subplots()
+
+    divider = make_axes_locatable(ax)
+
+    ax.plot(X, y, color="tab:gray", label="latent function")
+    ax.scatter(X_samples, y_samples, marker='x', color='k',
+               label="noisy observations")
+
+    ax.axhline(y_samples.min(), xmin=0.0, xmax=1.0, color='k', linewidth=1.0, linestyle='dashed')
+    ax.annotate(rf"$\tau=\min_n y_n$", xy=(X[-1], y_samples.min()),
+                xycoords='data', xytext=(-35.0, 4.0), textcoords='offset points',
+                fontsize="x-small", arrowprops=dict(facecolor='black', arrowstyle='-'))
+
+    ax.axhline(tau, xmin=0.0, xmax=1.0, color='k', linewidth=1.0, linestyle='dashed')
+    ax.annotate(rf"$\tau={{{tau:.2f}}}$", xy=(X[-1], tau),
+                xycoords='data', xytext=(-35.0, 4.0), textcoords='offset points',
+                fontsize="x-small", arrowprops=dict(facecolor='black', arrowstyle='-'))
+
+    ax.set_xlabel(r"$x$")
+    ax.set_ylabel(r"$y$")
+
+    ax.legend(loc="upper left")
+
+    ax_y = divider.append_axes("right", size=0.9, pad=0.1, sharey=ax)
+
+    sns.ecdfplot(y=y_samples, c='tab:gray', ax=ax_y)
+
+    ax_y.hlines(tau, xmin=0, xmax=gamma,
+                colors='k', linestyles='dashed', linewidth=1.0)
+    ax_y.vlines(gamma, ymin=y_samples.min(), ymax=tau,
+                colors='k', linestyles='dashed', linewidth=1.0)
+    ax_y.annotate(rf"$\gamma={{{gamma:.2f}}}$", xy=(gamma, y_samples.min()),
+                  xycoords='data', xytext=(5.0, 0.0), textcoords='offset points',
+                  fontsize="x-small", arrowprops=dict(facecolor='black', arrowstyle='-'))
+
+    ax_y.set_xlabel(r"$\Phi(y)$")
+    ax_y.yaxis.set_tick_params(labelleft=False)
+
+    plt.tight_layout()
+
+    for ext in extension:
+        fig.savefig(output_path.joinpath(f"observations_ecdf_{suffix}.{ext}"),
+                    dpi=dpi, transparent=transparent)
 
     plt.show()
     # %%
@@ -205,9 +257,11 @@ def main(name, width, aspect, extension, output_dir):
 
     ax.legend()
 
+    plt.tight_layout()
+
     for ext in extension:
         fig.savefig(output_path.joinpath(f"kde_seaborn_{suffix}.{ext}"),
-                    bbox_inches="tight")
+                    dpi=dpi, transparent=transparent)
 
     plt.show()
     # %%
@@ -237,9 +291,11 @@ def main(name, width, aspect, extension, output_dir):
 
     ax.legend()
 
+    plt.tight_layout()
+
     for ext in extension:
         fig.savefig(output_path.joinpath(f"kde_statsmodel_normal_reference_{suffix}.{ext}"),
-                    bbox_inches="tight")
+                    dpi=dpi, transparent=transparent)
 
     plt.show()
     # %%
@@ -263,9 +319,11 @@ def main(name, width, aspect, extension, output_dir):
 
     ax.legend()
 
+    plt.tight_layout()
+
     for ext in extension:
         fig.savefig(output_path.joinpath(f"ratio_kde_statsmodel_normal_reference_{suffix}.{ext}"),
-                    bbox_inches="tight")
+                    dpi=dpi, transparent=transparent)
 
     plt.show()
     # %%
@@ -276,13 +334,13 @@ def main(name, width, aspect, extension, output_dir):
 
     ax_main.plot(X, y, color="tab:gray", label="latent function")
     ax_main.scatter(X_samples_l, y_samples[mask_l],
-                    alpha=0.8, label=r'$y < \tau$')
+                    marker='x', alpha=0.8, label=r'observations $y < \tau$')
     ax_main.scatter(X_samples_g, y_samples[mask_g],
-                    alpha=0.8, label=r'$y \geq \tau$')
+                    marker='x', alpha=0.8, label=r'observations $y \geq \tau$')
     ax_main.axhline(tau, xmin=0, xmax=1.0,
-                    color='gray', linewidth=1.0, linestyle='dashed')
+                    color='k', linewidth=1.0, linestyle='dashed')
     ax_main.annotate(rf"$\tau={{{tau:.2f}}}$", xy=(X[-1], tau),
-                     xycoords='data', xytext=(-25.0, -8.0), textcoords='offset points',
+                     xycoords='data', xytext=(-30.0, -8.0), textcoords='offset points',
                      fontsize="x-small", arrowprops=dict(facecolor='black', arrowstyle='-'))
 
     # ax_main.set_xscale("log")
@@ -291,27 +349,29 @@ def main(name, width, aspect, extension, output_dir):
 
     ax_main.legend(loc="upper left")
 
-    ax_x = divider.append_axes("top", size=0.9, pad=0.1, sharex=ax_main)
+    ax_x = divider.append_axes("top", size=0.8, pad=0.1, sharex=ax_main)
 
     ax_x.plot(X, kde_l.evaluate(X.squeeze()), label=r"$\ell(x)$")
     ax_x.plot(X, kde_g.evaluate(X.squeeze()), label=r"$g(x)$")
 
-    sns.rugplot(x=X_samples_l.squeeze(), ax=ax_x)
-    sns.rugplot(x=X_samples_g.squeeze(), ax=ax_x)
+    ax_x.set_prop_cycle(None)
+
+    sns.rugplot(x=X_samples_l.squeeze(), height=0.1, ax=ax_x)
+    sns.rugplot(x=X_samples_g.squeeze(), height=0.1, ax=ax_x)
 
     ax_x.set_ylabel("density")
     ax_x.xaxis.set_tick_params(labelbottom=False)
 
-    ax_x.legend()
+    ax_x.legend(loc="upper left")
 
     ax_y = divider.append_axes("right", size=0.9, pad=0.1, sharey=ax_main)
 
-    sns.ecdfplot(y=y_samples, ax=ax_y)
+    sns.ecdfplot(y=y_samples, c='tab:gray', ax=ax_y)
 
     ax_y.hlines(tau, xmin=0, xmax=gamma,
-                colors='gray', linestyles='dashed', linewidth=1.0)
+                colors='k', linestyles='dashed', linewidth=1.0)
     ax_y.vlines(gamma, ymin=y_samples.min(), ymax=tau,
-                colors='gray', linestyles='dashed', linewidth=1.0)
+                colors='k', linestyles='dashed', linewidth=1.0)
     ax_y.annotate(rf"$\gamma={{{gamma:.2f}}}$", xy=(gamma, y_samples.min()),
                   xycoords='data', xytext=(5.0, 0.0), textcoords='offset points',
                   fontsize="x-small", arrowprops=dict(facecolor='black', arrowstyle='-'))
@@ -319,9 +379,11 @@ def main(name, width, aspect, extension, output_dir):
     ax_y.set_xlabel(r'$\Phi(y)$')
     ax_y.yaxis.set_tick_params(labelleft=False)
 
+    plt.tight_layout()
+
     for ext in extension:
-        fig.savefig(output_path.joinpath(f"summary_{suffix}.{ext}"),
-                    bbox_inches="tight")
+        fig.savefig(output_path.joinpath(f"summary_{suffix}.{ext}"), dpi=dpi, transparent=transparent)
+
     plt.show()
     # %%
 
@@ -348,9 +410,11 @@ def main(name, width, aspect, extension, output_dir):
 
     ax.legend()
 
+    plt.tight_layout()
+
     for ext in extension:
         fig.savefig(output_path.joinpath(f"kde_sklearn_{suffix}.{ext}"),
-                    bbox_inches="tight")
+                    dpi=dpi, transparent=transparent)
 
     plt.show()
     # %%
@@ -373,9 +437,11 @@ def main(name, width, aspect, extension, output_dir):
 
     ax.legend()
 
+    plt.tight_layout()
+
     for ext in extension:
         fig.savefig(output_path.joinpath(f"ratio_kde_sklearn_{suffix}.{ext}"),
-                    bbox_inches="tight")
+                    dpi=dpi, transparent=transparent)
 
     plt.show()
     # %%
@@ -419,16 +485,18 @@ def main(name, width, aspect, extension, output_dir):
                         label="posterior predictive std dev", ax=ax)
 
     ax.plot(X, y, label="true", color="tab:gray")
-    ax.scatter(X_samples, y_samples, alpha=0.8)
+    ax.scatter(X_samples, y_samples, marker='x', alpha=0.8)
 
     ax.legend()
 
     ax.set_xlabel(r'$x$')
     ax.set_ylabel(r'$y$')
 
+    plt.tight_layout()
+
     for ext in extension:
         fig.savefig(output_path.joinpath(f"gp_posterior_predictive_{suffix}.{ext}"),
-                    bbox_inches="tight")
+                    dpi=dpi, transparent=transparent)
 
     plt.show()
 
@@ -441,34 +509,44 @@ def main(name, width, aspect, extension, output_dir):
 
     ax.plot(X, ei)
 
+    plt.tight_layout()
+
     for ext in extension:
-        fig.savefig(output_path.joinpath(f"ei_{suffix}.{ext}"),
-                    bbox_inches="tight")
+        fig.savefig(output_path.joinpath(f"ei_{suffix}.{ext}"), dpi=dpi,
+                    transparent=transparent)
 
     plt.show()
 
     gammas = np.arange(0., 0.5, 0.15)
     y_quantiles = np.quantile(y_samples, q=gammas)
+
+    pis = gprm_marginals.cdf(y_quantiles.reshape(-1, 1))
+
     eis = (y_quantiles.reshape(-1, 1) - gprm.mean()) * gprm_marginals.cdf(y_quantiles.reshape(-1, 1))
     eis += gprm.stddev() * gprm_marginals.prob(y_quantiles.reshape(-1, 1))
 
-    import pandas as pd
+    frames = []
+    for kind, arr in [("PI", pis), ("EI", eis)]:
+        data = pd.DataFrame(data=arr.numpy(), index=gammas, columns=X.squeeze())
+        data.index.name = "gamma"
+        data.columns.name = "x"
+        s = data.stack()
+        s.name = "y"
+        frame = s.reset_index()
+        frames.append(frame.assign(kind=kind))
 
-    data = pd.DataFrame(data=eis.numpy(), index=gammas, columns=X.squeeze())
-    data.index.name = r"$\gamma$"
-    data.columns.name = r"$x$"
-    s = data.stack()
-    s.name = "ei"
-    df = s.reset_index()
+    data = pd.concat(frames, axis="index", sort=True)
 
     fig, ax = plt.subplots()
 
-    sns.lineplot(x=r"$x$", y="ei", hue=r"$\gamma$", data=df, ax=ax)
+    sns.lineplot(x="x", y="y", hue="gamma", style="kind", data=data, ax=ax)
+
     # ax.plot(gamma, eis.numpy().T)
+    plt.tight_layout()
 
     for ext in extension:
-        fig.savefig(output_path.joinpath(f"eis_{suffix}.{ext}"),
-                    bbox_inches="tight")
+        fig.savefig(output_path.joinpath(f"eis_{suffix}.{ext}"), dpi=dpi,
+                    transparent=transparent)
 
     plt.show()
 
