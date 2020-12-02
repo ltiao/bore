@@ -3,9 +3,8 @@ import tensorflow as tf
 
 from tensorflow.keras.losses import BinaryCrossentropy
 from scipy.optimize import minimize
-from scipy.stats import truncnorm
 
-from ..engine import Record
+from ..engine import Record, truncated_normal
 from ..models import DenseSequential
 from ..optimizers import multi_start, random_start
 from ..types import DenseConfigurationSpace, DenseConfiguration
@@ -117,8 +116,12 @@ class RatioEstimator(base_config_generator):
         self.config_space = DenseConfigurationSpace(config_space, seed=seed)
         self.bounds = self.config_space.get_bounds()
 
+        input_dim = self.config_space.size_dense
+
         # Build neural network probabilistic classifier
-        self.logit = self._build_compile_network(**classifier_kws)
+        self.logger.debug("Building and compiling network...")
+        self.logit = self._build_compile_network(input_dim, **classifier_kws)
+        self.logit.summary(print_fn=self.logger.debug)
 
         # Options for fitting neural network parameters
         self.batch_size = fit_kws["batch_size"]
@@ -158,9 +161,9 @@ class RatioEstimator(base_config_generator):
         return steps_per_epoch
 
     @staticmethod
-    def _build_compile_network(num_layers, num_units, activation, optimizer):
+    def _build_compile_network(input_dim, num_layers, num_units, activation, optimizer):
 
-        network = DenseSequential(output_dim=1,
+        network = DenseSequential(input_dim=input_dim, output_dim=1,
                                   num_layers=num_layers,
                                   num_units=num_units,
                                   layer_kws=dict(activation=activation))
@@ -207,8 +210,8 @@ class RatioEstimator(base_config_generator):
         self.logger.debug("Beginning multi-start maximization with "
                           f"{self.num_start_points} starts...")
 
-        # TODO(LT): a lot of redundant code duplicating and confusing variable
-        # naming here.
+        # TODO(LT): There is a lot of redundant code duplicating and confusing
+        # variable naming here.
         if not self.restart:
             res = None
             i = 0
@@ -260,16 +263,17 @@ class RatioEstimator(base_config_generator):
         config_random = self.config_space.sample_configuration()
         config_random_dict = config_random.get_dictionary()
 
-        if dataset_size < self.num_random_init:
-            self.logger.debug(f"Completed {dataset_size}/{self.num_random_init}"
-                              " initial runs. Suggesting random candidate...")
-            return (config_random_dict, {})
-
+        # epsilon-greedy exploration
         if self.random_rate is not None and \
                 self.random_state.binomial(p=self.random_rate, n=1):
             self.logger.info("[Glob. maximum: skipped "
                              f"(prob={self.random_rate:.2f})] "
                              "Suggesting random candidate ...")
+            return (config_random_dict, {})
+
+        if dataset_size < self.num_random_init:
+            self.logger.debug(f"Completed {dataset_size}/{self.num_random_init}"
+                              " initial runs. Suggesting random candidate...")
             return (config_random_dict, {})
 
         # Update model
@@ -278,8 +282,8 @@ class RatioEstimator(base_config_generator):
         # Maximize acquisition function
         opt = self._get_maximum()
         if opt is None:
-            # TODO(LT): It's actually important to report what one of these
-            # occurred...
+            # TODO(LT): It's actually important to report which of these
+            # failures occurred...
             self.logger.warn("[Glob. maximum: not found!] Either optimization "
                              f"failed in all {self.num_start_points} starts, or "
                              "all maxima found have been evaluated previously!"
@@ -287,21 +291,18 @@ class RatioEstimator(base_config_generator):
             return (config_random_dict, {})
 
         loc = opt.x
+        self.logger.info(f"[Glob. maximum: value={-opt.fun:.3f} x={loc}]")
 
         if self.distortion is None:
-
             config_opt_arr = loc
         else:
-
-            # dist = multivariate_normal(mean=opt.x, cov=opt.hess_inv.todense())
-            a = (self.bounds.lb - loc) / self.distortion
-            b = (self.bounds.ub - loc) / self.distortion
-            dist = truncnorm(a=a, b=b, loc=loc, scale=self.distortion)
-
+            dist = truncated_normal(loc=loc,
+                                    scale=self.distortion,
+                                    lower=self.bounds.lb,
+                                    upper=self.bounds.ub)
             config_opt_arr = dist.rvs(random_state=self.random_state)
-
-        self.logger.info(f"[Glob. maximum: value={-opt.fun:.3f} x={loc}] "
-                         f"Suggesting x={config_opt_arr}")
+            self.logger.info(f"Suggesting x={config_opt_arr} "
+                             f"(distortion={self.distortion:.3E})")
 
         config_opt_dict = self._dict_from_array(config_opt_arr)
 
