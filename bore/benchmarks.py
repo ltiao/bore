@@ -33,6 +33,46 @@ class Benchmark(BenchmarkBase):
         return config_space_to_search_space(cs)
 
 
+class Forrester(Benchmark):
+
+    def __call__(self, kwargs, budget=None):
+        return Evaluation(value=self.func(**kwargs), duration=None)
+
+    @staticmethod
+    def func(x):
+        return (6.*x - 2.)**2 * np.sin(12.*x-4.)
+
+    def get_config_space(self):
+        cs = CS.ConfigurationSpace()
+        cs.add_hyperparameter(
+            CS.UniformFloatHyperparameter("x", lower=0., upper=1.))
+        return cs
+
+    def get_minimum(self):
+        raise NotImplementedError
+        # return 0.397887
+
+
+class Sinusoid(Benchmark):
+
+    def __call__(self, kwargs, budget=None):
+        return Evaluation(value=self.func(**kwargs), duration=None)
+
+    @staticmethod
+    def func(x):
+        return np.sin(3.0*x) + x**2 - 0.7*x
+
+    def get_config_space(self):
+        cs = CS.ConfigurationSpace()
+        cs.add_hyperparameter(
+            CS.UniformFloatHyperparameter("x", lower=-1.0, upper=2.0))
+        return cs
+
+    def get_minimum(self):
+        raise NotImplementedError
+        # return 0.397887
+
+
 class Branin(Benchmark):
 
     def __init__(self, a=1.0, b=5.1/(4*np.pi**2), c=5.0/np.pi, r=6.0, s=10.0,

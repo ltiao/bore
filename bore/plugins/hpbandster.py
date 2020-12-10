@@ -4,11 +4,11 @@ import tensorflow as tf
 from tensorflow.keras.losses import BinaryCrossentropy
 from scipy.optimize import minimize
 
-from ..engine import Record, truncated_normal
-from ..models import DenseSequential
+from ..data import Record
+from ..engine import convert, truncated_normal
+from ..models import DenseMinimizableSequential
 from ..optimizers import multi_start, random_start
 from ..types import DenseConfigurationSpace, DenseConfiguration
-from ..decorators import unbatch, value_and_gradient, numpy_io, squeeze
 
 from hpbandster.optimizers.hyperband import HyperBand
 from hpbandster.core.base_config_generator import base_config_generator
@@ -131,7 +131,8 @@ class RatioEstimator(base_config_generator):
         final_activation = optimizer_kws["final_activation"]
         assert final_activation in ACTIVATIONS, \
             f"`activation_final` must be one of {tuple(ACTIVATIONS.keys())}"
-        self.loss = self._build_loss(activation=ACTIVATIONS[final_activation])
+        self.loss = convert(self.logit, transform=lambda u: - ACTIVATIONS[final_activation](u))
+        # self.loss = self._build_loss(activation=ACTIVATIONS[final_activation])
 
         assert optimizer_kws["num_start_points"] > 0
         self.num_start_points = optimizer_kws["num_start_points"]
@@ -163,27 +164,14 @@ class RatioEstimator(base_config_generator):
     @staticmethod
     def _build_compile_network(input_dim, num_layers, num_units, activation, optimizer):
 
-        network = DenseSequential(input_dim=input_dim, output_dim=1,
-                                  num_layers=num_layers,
-                                  num_units=num_units,
-                                  layer_kws=dict(activation=activation))
+        network = DenseMinimizableSequential(input_dim=input_dim, output_dim=1,
+                                             num_layers=num_layers,
+                                             num_units=num_units,
+                                             layer_kws=dict(
+                                                activation=activation))
         network.compile(optimizer=optimizer, metrics=["accuracy"],
                         loss=BinaryCrossentropy(from_logits=True))
         return network
-
-    def _build_loss(self, activation):
-        """
-        Returns the loss, i.e. the (negative) acquisition function to be
-        minimized through the `scipy.optimize` interface.
-        """
-        @numpy_io
-        @value_and_gradient  # (D,) -> () to (D,) -> (), (D,)
-        @squeeze(axis=-1)  # (D,) -> (1,) to (D,) -> ()
-        @unbatch  # (None, D) -> (None, 1) to (D,) -> (1,)
-        def loss(x):
-            return - activation(self.logit(x))
-
-        return loss
 
     def _update_model(self):
 
@@ -271,6 +259,7 @@ class RatioEstimator(base_config_generator):
                              "Suggesting random candidate ...")
             return (config_random_dict, {})
 
+        # Insufficient training data
         if dataset_size < self.num_random_init:
             self.logger.debug(f"Completed {dataset_size}/{self.num_random_init}"
                               " initial runs. Suggesting random candidate...")

@@ -1,10 +1,7 @@
-import pandas as pd
-import numpy as np
+import tensorflow as tf
 
 from scipy.stats import truncnorm
-
-# TODO(LT): Extract framework agnostic core enginer code from
-# `plugins.hpbandster` and place it here.
+from .decorators import unbatch, value_and_gradient, numpy_io, squeeze
 
 
 def truncated_normal(loc, scale, lower, upper):
@@ -13,48 +10,37 @@ def truncated_normal(loc, scale, lower, upper):
     return truncnorm(a=a, b=b, loc=loc, scale=scale)
 
 
-class Record:
+def convert(model, transform=tf.identity):
+    """
+    Builds a callable from a Keras model that takes a single array as input
+    (rather than a batch of Tensors), and returns the output value as a scalar
+    the and gradient vector as an array.
 
-    def __init__(self):
-        self.features = []
-        self.targets = []
-        self.budgets = []
+    This function makes it easy to use methods from ``scipy.optimize`` to
+    minimize inputs to a model wrt to its output with option ``jac=True``.
 
-    def size(self):
-        return len(self.targets)
+    Parameters
+    ----------
+    model : a Keras model
+        A Keras model, or any batched TensorFlow operation, with output
+        dimension 1. More specifically, any operation that takes a Tensor of
+        shape ``(None, D)`` as input and outputs Tensor of shape ``(None, 1)``.
+    transform : callable, optional
+        A function that transforms the output of the model, e.g. negates the
+        output for subsequent maximization instead of minimization.
 
-    def append(self, x, y, b=None):
-        self.features.append(x)
-        self.targets.append(y)
-        if b is not None:
-            self.budgets.append(b)
+    Returns
+    -------
+    fn : callable
+        A function that takes an array of shape ``(D,)`` as input, and returns
+        a pair with shape ``(), (D,)``, consisting of the output scalar and the
+        gradient vector.
+    """
+    @numpy_io  # array input to Tensor and Tensor outputs back to array
+    @value_and_gradient  # `(D,) -> ()` to `(D,) -> (), (D,)`
+    @squeeze(axis=-1)  # `(D,) -> (1,)` to `(D,) -> ()`
+    @unbatch  # `(None, D) -> (None, 1)` to `(D,) -> (1,)`
+    def fn(x):
+        return transform(model(x))
 
-    def load_feature_matrix(self):
-        return np.vstack(self.features)
-
-    def load_target_vector(self):
-        return np.hstack(self.targets)
-
-    def load_regression_data(self):
-        X = self.load_feature_matrix()
-        y = self.load_target_vector()
-        return X, y
-
-    def load_classification_data(self, gamma):
-        X, y = self.load_regression_data()
-        tau = np.quantile(y, q=gamma)
-        z = np.less(y, tau)
-        return X, z
-
-    def to_dataframe(self):
-        frame = pd.DataFrame(data=self.features).assign(budget=self.budgets,
-                                                        loss=self.targets)
-        return frame
-
-    def is_duplicate(self, x, rtol=1e-5, atol=1e-8):
-        # Clever ways of doing this would involve data structs. like KD-trees
-        # or locality sensitive hashing (LSH), but these are premature
-        # optimizations at this point, especially since the `any` below does lazy
-        # evaluation, i.e. is early stopped as soon as anything returns `True`.
-        return any(np.allclose(x_prev, x, rtol=rtol, atol=atol)
-                   for x_prev in self.features)
+    return fn
