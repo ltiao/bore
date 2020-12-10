@@ -5,17 +5,16 @@ from scipy.optimize import minimize
 from .optimizers import multi_start
 from .engine import convert
 
-
 minimize_multi_start = multi_start(minimizer_fn=minimize)
 
 
-class MinimizableMixin:
+class MaximizableMixin:
 
     def __init__(self, transform=tf.identity, *args, **kwargs):
-        super(MinimizableMixin, self).__init__(*args, **kwargs)
-        self.func = convert(self, transform=transform)
+        super(MaximizableMixin, self).__init__(*args, **kwargs)
+        self.func = convert(self, transform=lambda u: - transform(u))
 
-    def minima(self, bounds, num_start_points=3, method="L-BFGS-B",
+    def maxima(self, bounds, num_start_points=3, method="L-BFGS-B",
                options=dict(maxiter=200, ftol=1e-9), random_state=None):
 
         return minimize_multi_start(self.func, bounds=bounds,
@@ -23,16 +22,16 @@ class MinimizableMixin:
                                     random_state=random_state,
                                     method=method, jac=True, options=options)
 
-    def argmin(self, bounds, print_fn=print, *args, **kwargs):
+    def argmax(self, bounds, print_fn=print, *args, **kwargs):
 
         # Equivalent to:
         # res_best = min(filter(lambda res: res.success or res.status == 1,
-        #                       self.minima(bounds, *args, **kwargs)),
+        #                       self.maxima(bounds, *args, **kwargs)),
         #                key=lambda res: res.fun)
         res_best = None
-        for j, res in enumerate(self.minima(bounds, *args, **kwargs)):
+        for i, res in enumerate(self.maxima(bounds, *args, **kwargs)):
 
-            print_fn(f"[Maximum {j+1:02d}: value={res.fun:.3f}] "
+            print_fn(f"[Maximum {i+1:02d}: value={res.fun:.3f}] "
                      f"success: {res.success}, "
                      f"iterations: {res.nit:02d}, "
                      f"status: {res.status} ({res.message})")

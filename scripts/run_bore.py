@@ -37,7 +37,7 @@ logging.basicConfig(level=logging.DEBUG)
 @click.option("--num-layers", default=2)
 @click.option("--num-units", default=32)
 @click.option("--activation", default="elu")
-@click.option('--final-activation', default="sigmoid")
+@click.option('--transform', default="sigmoid")
 @click.option("--method", default="L-BFGS-B")
 @click.option("--max-iter", default=1000)
 @click.option("--ftol", default=1e-9)
@@ -53,7 +53,7 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
          run_start, num_iterations, eta, min_budget, max_budget, gamma,
          num_random_init, random_rate, num_start_points, batch_size,
          num_steps_per_iter, optimizer, num_layers, num_units, activation,
-         final_activation, method, max_iter, ftol, distortion, restart,
+         transform, method, max_iter, ftol, distortion, restart,
          input_dir, output_dir):
 
     benchmark = make_benchmark(benchmark_name,
@@ -73,7 +73,7 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
                    batch_size=batch_size, num_steps_per_iter=num_steps_per_iter,
                    optimizer=optimizer, num_layers=num_layers,
                    num_units=num_units, activation=activation,
-                   final_activation=final_activation, method=method,
+                   transform=transform, method=method,
                    max_iter=max_iter, ftol=ftol, distortion=distortion,
                    restart=restart)
     with output_path.joinpath("options.yaml").open('w') as f:

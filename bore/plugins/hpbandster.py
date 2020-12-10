@@ -6,7 +6,7 @@ from scipy.optimize import minimize
 
 from ..data import Record
 from ..engine import convert, truncated_normal
-from ..models import DenseMinimizableSequential
+from ..models import DenseMaximizableSequential
 from ..optimizers import multi_start, random_start
 from ..types import DenseConfigurationSpace, DenseConfiguration
 
@@ -14,9 +14,7 @@ from hpbandster.optimizers.hyperband import HyperBand
 from hpbandster.core.base_config_generator import base_config_generator
 
 
-ACTIVATIONS = dict(identity=tf.identity,
-                   sigmoid=tf.sigmoid,
-                   exp=tf.exp)
+TRANSFORMS = dict(identity=tf.identity, sigmoid=tf.sigmoid, exp=tf.exp)
 
 minimize_multi_start = multi_start(minimizer_fn=minimize)
 minimize_random_start = random_start(minimizer_fn=minimize)
@@ -28,7 +26,7 @@ class BORE(HyperBand):
                  gamma=None, num_random_init=10, random_rate=None,
                  num_start_points=10, batch_size=64, num_steps_per_iter=1000,
                  optimizer="adam", num_layers=2, num_units=32,
-                 activation="relu", final_activation="sigmoid",
+                 activation="relu", transform="sigmoid",
                  method="L-BFGS-B", max_iter=100, ftol=1e-2, distortion=None,
                  restart=False, seed=None, **kwargs):
 
@@ -44,7 +42,7 @@ class BORE(HyperBand):
                                                 optimizer=optimizer),
                             fit_kws=dict(batch_size=batch_size,
                                          num_steps_per_iter=num_steps_per_iter),
-                            optimizer_kws=dict(final_activation=final_activation,
+                            optimizer_kws=dict(transform=transform,
                                                method=method,
                                                max_iter=max_iter,
                                                ftol=ftol,
@@ -91,7 +89,7 @@ class RatioEstimator(base_config_generator):
                                      activation="relu",
                                      optimizer="adam"),
                  fit_kws=dict(batch_size=64, num_steps_per_iter=100),
-                 optimizer_kws=dict(final_activation="sigmoid",
+                 optimizer_kws=dict(transform="sigmoid",
                                     method="L-BFGS-B",
                                     max_iter=100,
                                     ftol=1e-2,
@@ -128,10 +126,11 @@ class RatioEstimator(base_config_generator):
         self.num_steps_per_iter = fit_kws["num_steps_per_iter"]
 
         # Options for maximizing the acquisition function
-        final_activation = optimizer_kws["final_activation"]
-        assert final_activation in ACTIVATIONS, \
-            f"`activation_final` must be one of {tuple(ACTIVATIONS.keys())}"
-        self.loss = convert(self.logit, transform=lambda u: - ACTIVATIONS[final_activation](u))
+        transform_name = optimizer_kws["transform"]
+        assert transform_name in TRANSFORMS, \
+            f"`transform` must be one of {tuple(TRANSFORMS.keys())}"
+        transform = TRANSFORMS[transform_name]
+        self.loss = convert(self.logit, transform=lambda u: - transform(u))
         # self.loss = self._build_loss(activation=ACTIVATIONS[final_activation])
 
         assert optimizer_kws["num_start_points"] > 0
@@ -164,7 +163,7 @@ class RatioEstimator(base_config_generator):
     @staticmethod
     def _build_compile_network(input_dim, num_layers, num_units, activation, optimizer):
 
-        network = DenseMinimizableSequential(input_dim=input_dim, output_dim=1,
+        network = DenseMaximizableSequential(input_dim=input_dim, output_dim=1,
                                              num_layers=num_layers,
                                              num_units=num_units,
                                              layer_kws=dict(
