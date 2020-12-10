@@ -105,8 +105,8 @@ class DenseConfiguration(CS.Configuration):
 
         assert isinstance(configuration_space, DenseConfigurationSpace)
         cs = configuration_space
-        # TODO(LT): specify `dtype` flexibly
         # initialize output array
+        # TODO(LT): specify `dtype` flexibly
         array_sparse = np.empty(cs.size_sparse, dtype="float64")
 
         # process numerical hyperparameters
@@ -125,8 +125,8 @@ class DenseConfiguration(CS.Configuration):
         cs = self.configuration_space
         array_sparse = super(DenseConfiguration, self).get_array()
 
-        # TODO(LT): specify `dtype` flexibly
         # initialize output array
+        # TODO(LT): specify `dtype` flexibly
         array_dense = np.zeros(cs.size_dense, dtype="float64")
 
         # process numerical hyperparameters

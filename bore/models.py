@@ -1,14 +1,23 @@
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import (LSTM, RNN, Dense, Input, LSTMCell,
-                                     Masking, RepeatVector, TimeDistributed)
+from tensorflow.keras.models import Model, Sequential
+from tensorflow.keras.layers import Dense
+
+from .mixins import MinimizableMixin
 
 
-class DenseSequential(Sequential):
+class MinimizableModel(MinimizableMixin, Model):
+    pass
+
+
+class MinimizableSequential(MinimizableMixin, Sequential):
+    pass
+
+
+class DenseMinimizableSequential(MinimizableMixin, Sequential):
 
     def __init__(self, input_dim, output_dim, num_layers, num_units,
                  layer_kws={}, final_layer_kws={}):
 
-        super(DenseSequential, self).__init__()
+        super(DenseMinimizableSequential, self).__init__()
 
         for i in range(num_layers):
             if not i:
