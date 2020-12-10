@@ -5,7 +5,7 @@ from tensorflow.keras.losses import BinaryCrossentropy
 from scipy.optimize import minimize
 
 from ..data import Record
-from ..engine import foo, truncated_normal
+from ..engine import convert, truncated_normal
 from ..models import DenseMinimizableSequential
 from ..optimizers import multi_start, random_start
 from ..types import DenseConfigurationSpace, DenseConfiguration
@@ -131,7 +131,7 @@ class RatioEstimator(base_config_generator):
         final_activation = optimizer_kws["final_activation"]
         assert final_activation in ACTIVATIONS, \
             f"`activation_final` must be one of {tuple(ACTIVATIONS.keys())}"
-        self.loss = foo(self.logit, transform=lambda u: - ACTIVATIONS[final_activation](u))
+        self.loss = convert(self.logit, transform=lambda u: - ACTIVATIONS[final_activation](u))
         # self.loss = self._build_loss(activation=ACTIVATIONS[final_activation])
 
         assert optimizer_kws["num_start_points"] > 0
