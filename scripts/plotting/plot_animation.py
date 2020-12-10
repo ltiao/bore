@@ -12,10 +12,9 @@ from tensorflow.keras.layers import Dense
 from tensorflow.keras.losses import BinaryCrossentropy
 
 from scipy.optimize import Bounds
-from operator import neg
 
 from bore.benchmarks import Forrester
-from bore.models import MinimizableSequential
+from bore.models import MaximizableSequential
 
 from pathlib import Path
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -85,7 +84,7 @@ def main(name, output_dir, num_iterations, transparent, context, style,
     X_grid = np.linspace(hx.lower, hx.upper, num_index_points).reshape(-1, num_features)
     y_grid = benchmark.func(X_grid)
 
-    model = MinimizableSequential(transform=neg)
+    model = MaximizableSequential()
     model.add(Dense(num_units, input_dim=num_features, activation=activation))
     model.add(Dense(num_units, activation=activation))
     model.add(Dense(num_units, activation=activation))
@@ -128,7 +127,7 @@ def main(name, output_dir, num_iterations, transparent, context, style,
         model.fit(X, z, epochs=epochs, batch_size=batch_size, verbose=False)
 
         # suggest new candidate
-        x_new = model.argmin(bounds=bounds, print_fn=click.echo)
+        x_new = model.argmax(bounds=bounds, print_fn=click.echo)
 
         # evaluate blackbox
         y_new = benchmark.func(x_new) + random_state.normal(scale=noise_scale)
