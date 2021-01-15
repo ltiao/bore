@@ -18,7 +18,7 @@ from abc import ABC, abstractmethod
 from pathlib import Path
 
 from tensorflow.keras.losses import BinaryCrossentropy
-from bore.models import DenseSequential
+from bore.models import DenseMaximizableSequential
 from bore.datasets import make_classification_dataset
 from utils import GOLDEN_RATIO, WIDTH, pt_to_in
 
@@ -30,7 +30,7 @@ K.set_floatx("float64")
 # shortcuts
 tfd = tfp.distributions
 
-OUTPUT_DIR = "logs/figures/"
+OUTPUT_DIR = "figures/"
 
 
 class DensityRatioBase(ABC):
@@ -84,8 +84,8 @@ class MLPDensityRatioEstimator(DensityRatioBase):
     def __init__(self, num_layers=2, num_units=32, activation="tanh",
                  seed=None, *args, **kwargs):
 
-        self.model = DenseSequential(1, num_layers, num_units,
-                                     layer_kws=dict(activation=activation))
+        self.model = DenseMaximizableSequential(1, num_layers, num_units,
+                                                layer_kws=dict(activation=activation))
 
     def logit(self, X, y=None):
 
@@ -164,13 +164,13 @@ def main(name, gamma, estimation, output_dir, transparent, context, style,
     X_grid = np.linspace(x_min, x_max, num_index_points) \
                .reshape(-1, num_features)
 
-    p = tfd.MixtureSameFamily(
-        mixture_distribution=tfd.Categorical(probs=[0.3, 0.7]),
-        components_distribution=tfd.Normal(loc=[2.0, -3.0], scale=[1.0, 0.5]))
-    q = tfd.Normal(loc=0.0, scale=2.0)
+    # p = tfd.MixtureSameFamily(
+    #     mixture_distribution=tfd.Categorical(probs=[0.3, 0.7]),
+    #     components_distribution=tfd.Normal(loc=[2.0, -3.0], scale=[1.0, 0.5]))
+    # q = tfd.Normal(loc=0.0, scale=2.0)
 
-    # p = tfd.Normal(loc=0.0, scale=1.0)
-    # q = tfd.Normal(loc=0.5, scale=1.0)
+    p = tfd.Normal(loc=0.0, scale=1.0)
+    q = tfd.Normal(loc=0.5, scale=1.0)
 
     # p = tfd.Normal(loc=1.0, scale=1.0)
     # q = tfd.Normal(loc=0.0, scale=2.0)
@@ -186,17 +186,29 @@ def main(name, gamma, estimation, output_dir, transparent, context, style,
     kde_greater = sm.nonparametric.KDEUnivariate(X_q)
     kde_greater.fit(bw="normal_reference")
 
-    fig, (ax1, ax2) = plt.subplots(nrows=2, sharex="col")
+    # fig, (ax1, ax2) = plt.subplots(nrows=2, sharex="col")
+
+    fig, ax1 = plt.subplots()
 
     ax1.plot(X_grid.squeeze(axis=-1),
              r.top.prob(X_grid).numpy().squeeze(axis=-1), label=r"$\ell(x)$")
     ax1.plot(X_grid.squeeze(axis=-1),
              r.bot.prob(X_grid).numpy().squeeze(axis=-1), label=r"$g(x)$")
 
-    # ax1.set_xlabel('$x$')
+    ax1.set_xlabel(r'$x$')
     ax1.set_ylabel('density')
 
     ax1.legend()
+
+    plt.tight_layout()
+
+    for ext in extension:
+        fig.savefig(output_path.joinpath(f"densities_{context}_{suffix}.{ext}"),
+                    dpi=dpi, transparent=transparent)
+
+    plt.show()
+
+    fig, ax2 = plt.subplots()
 
     ax2.plot(X_grid.squeeze(axis=-1),
              r.ratio(X_grid).numpy().squeeze(axis=-1), label=r"$r_0(x)$",
@@ -216,7 +228,7 @@ def main(name, gamma, estimation, output_dir, transparent, context, style,
     # #                .numpy().squeeze(axis=-1), label=fr"$r_{{{gamma:.2f}}}(x)$",
     # #          color="tab:green")
 
-    ax2.set_xlabel('$x$')
+    ax2.set_xlabel(r'$x$')
     ax2.set_ylabel('density ratio')
 
     ax2.legend()
@@ -224,7 +236,7 @@ def main(name, gamma, estimation, output_dir, transparent, context, style,
     plt.tight_layout()
 
     for ext in extension:
-        fig.savefig(output_path.joinpath(f"densities_{context}_{suffix}.{ext}"),
+        fig.savefig(output_path.joinpath(f"density_ratios_{context}_{suffix}.{ext}"),
                     dpi=dpi, transparent=transparent)
 
     plt.show()

@@ -30,9 +30,11 @@ logging.basicConfig(level=logging.DEBUG)
               help="Quantile, or mixing proportion.")
 @click.option("--num-random-init", default=10)
 @click.option("--random-rate", default=0.1, type=click.FloatRange(0., 1.))
+@click.option('--retrain/--no-retrain', default=False)
 @click.option("--num-start-points", default=3)
 @click.option("--batch-size", default=64)
 @click.option("--num-steps-per-iter", default=100)
+@click.option("--num-epochs", type=int)
 @click.option("--optimizer", default="adam")
 @click.option("--num-layers", default=2)
 @click.option("--num-units", default=32)
@@ -51,9 +53,9 @@ logging.basicConfig(level=logging.DEBUG)
               help="Output directory.")
 def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
          run_start, num_iterations, eta, min_budget, max_budget, gamma,
-         num_random_init, random_rate, num_start_points, batch_size,
-         num_steps_per_iter, optimizer, num_layers, num_units, activation,
-         transform, method, max_iter, ftol, distortion, restart,
+         num_random_init, random_rate, retrain, num_start_points, batch_size,
+         num_steps_per_iter, num_epochs, optimizer, num_layers, num_units,
+         activation, transform, method, max_iter, ftol, distortion, restart,
          input_dir, output_dir):
 
     benchmark = make_benchmark(benchmark_name,
@@ -69,11 +71,11 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
 
     options = dict(eta=eta, min_budget=min_budget, max_budget=max_budget,
                    gamma=gamma, num_random_init=num_random_init,
-                   random_rate=random_rate, num_start_points=num_start_points,
-                   batch_size=batch_size, num_steps_per_iter=num_steps_per_iter,
-                   optimizer=optimizer, num_layers=num_layers,
-                   num_units=num_units, activation=activation,
-                   transform=transform, method=method,
+                   random_rate=random_rate, retrain=retrain,
+                   num_start_points=num_start_points, batch_size=batch_size,
+                   num_steps_per_iter=num_steps_per_iter, num_epochs=num_epochs,
+                   optimizer=optimizer, num_layers=num_layers, num_units=num_units,
+                   activation=activation, transform=transform, method=method,
                    max_iter=max_iter, ftol=ftol, distortion=distortion,
                    restart=restart)
     with output_path.joinpath("options.yaml").open('w') as f:

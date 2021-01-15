@@ -1,5 +1,6 @@
 import numpy as np
 import tensorflow as tf
+import tensorflow.keras.backend as K
 
 from tensorflow.keras.losses import BinaryCrossentropy
 from scipy.optimize import minimize
@@ -23,9 +24,9 @@ minimize_random_start = random_start(minimizer_fn=minimize)
 class BORE(HyperBand):
 
     def __init__(self, config_space, eta=3, min_budget=0.01, max_budget=1,
-                 gamma=None, num_random_init=10, random_rate=None,
+                 gamma=None, num_random_init=10, random_rate=None, retrain=False,
                  num_start_points=10, batch_size=64, num_steps_per_iter=1000,
-                 optimizer="adam", num_layers=2, num_units=32,
+                 num_epochs=None, optimizer="adam", num_layers=2, num_units=32,
                  activation="relu", transform="sigmoid",
                  method="L-BFGS-B", max_iter=100, ftol=1e-2, distortion=None,
                  restart=False, seed=None, **kwargs):
@@ -35,13 +36,14 @@ class BORE(HyperBand):
 
         cg = RatioEstimator(config_space=config_space, gamma=gamma,
                             num_random_init=num_random_init,
-                            random_rate=random_rate,
+                            random_rate=random_rate, retrain=retrain,
                             classifier_kws=dict(num_layers=num_layers,
                                                 num_units=num_units,
                                                 activation=activation,
                                                 optimizer=optimizer),
                             fit_kws=dict(batch_size=batch_size,
-                                         num_steps_per_iter=num_steps_per_iter),
+                                         num_steps_per_iter=num_steps_per_iter,
+                                         num_epochs=num_epochs),
                             optimizer_kws=dict(transform=transform,
                                                method=method,
                                                max_iter=max_iter,
@@ -84,11 +86,12 @@ class RatioEstimator(base_config_generator):
     class to implement random sampling from a ConfigSpace
     """
     def __init__(self, config_space, gamma=1/3, num_random_init=10, random_rate=None,
+                 retrain=False,
                  classifier_kws=dict(num_layers=2,
                                      num_units=32,
                                      activation="relu",
                                      optimizer="adam"),
-                 fit_kws=dict(batch_size=64, num_steps_per_iter=100),
+                 fit_kws=dict(batch_size=64, num_epochs=None, num_steps_per_iter=100),
                  optimizer_kws=dict(transform="sigmoid",
                                     method="L-BFGS-B",
                                     max_iter=100,
@@ -116,22 +119,29 @@ class RatioEstimator(base_config_generator):
 
         input_dim = self.config_space.size_dense
 
-        # Build neural network probabilistic classifier
-        self.logger.debug("Building and compiling network...")
-        self.logit = self._build_compile_network(input_dim, **classifier_kws)
-        self.logit.summary(print_fn=self.logger.debug)
+        self.input_dim = input_dim
+        self.classifier_kws = classifier_kws
+
+        self.logit = None
+        if not retrain:
+            # Build neural network probabilistic classifier
+            self.logger.debug("Building and compiling network...")
+            self.logit = self._build_compile_network(input_dim, **classifier_kws)
+            self.logit.summary(print_fn=self.logger.debug)
 
         # Options for fitting neural network parameters
         self.batch_size = fit_kws["batch_size"]
         self.num_steps_per_iter = fit_kws["num_steps_per_iter"]
+        self.num_epochs = fit_kws["num_epochs"]
 
         # Options for maximizing the acquisition function
         transform_name = optimizer_kws["transform"]
         assert transform_name in TRANSFORMS, \
             f"`transform` must be one of {tuple(TRANSFORMS.keys())}"
-        transform = TRANSFORMS[transform_name]
-        self.loss = convert(self.logit, transform=lambda u: - transform(u))
-        # self.loss = self._build_loss(activation=ACTIVATIONS[final_activation])
+        self.transform = TRANSFORMS[transform_name]
+        self.loss = None
+        if not retrain:
+            self.loss = convert(self.logit, transform=lambda u: - self.transform(u))
 
         assert optimizer_kws["num_start_points"] > 0
         self.num_start_points = optimizer_kws["num_start_points"]
@@ -172,17 +182,26 @@ class RatioEstimator(base_config_generator):
                         loss=BinaryCrossentropy(from_logits=True))
         return network
 
-    def _update_model(self):
+    def _update_model(self, logit):
 
         X, z = self.record.load_classification_data(self.gamma)
 
         dataset_size = self.record.size()
         steps_per_epoch = self._get_steps_per_epoch(dataset_size)
-        num_epochs = self.num_steps_per_iter // steps_per_epoch
 
-        self.logit.fit(X, z, epochs=num_epochs, batch_size=self.batch_size,
-                       verbose=False)  # TODO(LT): Make this an argument
-        loss, accuracy = self.logit.evaluate(X, z, verbose=False)
+        num_epochs = self.num_epochs
+        if num_epochs is None:
+            num_epochs = self.num_steps_per_iter // steps_per_epoch
+            self.logger.debug("Argument `num_epochs` has not been specified. "
+                              f"Setting num_epochs={num_epochs}")
+        else:
+            self.logger.debug("Argument `num_epochs` is specified "
+                              f"(num_epochs={num_epochs}). "
+                              f"Ignoring num_steps_per_iter={self.num_steps_per_iter}")
+
+        logit.fit(X, z, epochs=num_epochs, batch_size=self.batch_size,
+                  verbose=False)  # TODO(LT): Make this an argument
+        loss, accuracy = logit.evaluate(X, z, verbose=False)
 
         self.logger.info(f"[Model fit: loss={loss:.3f}, "
                          f"accuracy={accuracy:.3f}] "
@@ -192,10 +211,14 @@ class RatioEstimator(base_config_generator):
                          f"num steps per iter: {self.num_steps_per_iter}, "
                          f"num epochs: {num_epochs}")
 
-    def _get_maximum(self):
+    def _get_maximum(self, logit):
 
         self.logger.debug("Beginning multi-start maximization with "
                           f"{self.num_start_points} starts...")
+
+        loss = self.loss
+        if loss is None:
+            loss = convert(logit, transform=lambda u: - self.transform(u))
 
         # TODO(LT): There is a lot of redundant code duplicating and confusing
         # variable naming here.
@@ -204,7 +227,7 @@ class RatioEstimator(base_config_generator):
             i = 0
             while res is None or not (res.success or res.status == 1) \
                     or self.record.is_duplicate(res.x):
-                res = minimize_random_start(self.loss, self.bounds,
+                res = minimize_random_start(loss, self.bounds,
                                             num_samples=self.num_start_points,
                                             method=self.method, jac=True,
                                             options=dict(maxiter=self.max_iter,
@@ -219,7 +242,7 @@ class RatioEstimator(base_config_generator):
 
             return res
 
-        results = minimize_multi_start(self.loss, self.bounds,
+        results = minimize_multi_start(loss, self.bounds,
                                        num_restarts=self.num_start_points,
                                        method=self.method, jac=True,
                                        options=dict(maxiter=self.max_iter,
@@ -264,11 +287,20 @@ class RatioEstimator(base_config_generator):
                               " initial runs. Suggesting random candidate...")
             return (config_random_dict, {})
 
+        logit = self.logit
+        delete = False
+        if logit is None:
+            # Build neural network probabilistic classifier
+            self.logger.debug("Building and compiling network...")
+            logit = self._build_compile_network(self.input_dim, **self.classifier_kws)
+            logit.summary(print_fn=self.logger.debug)
+            delete = True  # mark for deletion at the end of iteration
+
         # Update model
-        self._update_model()
+        self._update_model(logit=logit)
 
         # Maximize acquisition function
-        opt = self._get_maximum()
+        opt = self._get_maximum(logit)
         if opt is None:
             # TODO(LT): It's actually important to report which of these
             # failures occurred...
@@ -277,6 +309,13 @@ class RatioEstimator(base_config_generator):
                              "all maxima found have been evaluated previously!"
                              " Suggesting random candidate...")
             return (config_random_dict, {})
+
+        if delete:
+            # if we are not persisting model across BO iterations
+            # delete and clear from memory
+            self.logger.debug("Deleting model...")
+            K.clear_session()
+            del logit
 
         loc = opt.x
         self.logger.info(f"[Glob. maximum: value={-opt.fun:.3f} x={loc}]")

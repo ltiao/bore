@@ -1,4 +1,4 @@
-FROM tensorflow/tensorflow:2.3.1-gpu-jupyter
+FROM tensorflow/tensorflow:2.4.0-gpu-jupyter
 MAINTAINER Louis Tiao <louistiao@gmail.com>
 
 ENV LC_ALL C.UTF-8
@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # TODO: copy to temporary dir rather then some unknown current dir
 COPY requirements*.txt ./
-RUN python -m pip install --no-cache-dir --upgrade pip==20.3.1 keyrings.alt==3.4.0 && \
+RUN python -m pip install --no-cache-dir --upgrade pip==20.3.3 keyrings.alt==3.4.0 && \
     python -m pip install --no-cache-dir -r requirements_dev.txt && \
     python -m pip install --no-cache-dir -r requirements.txt
 
