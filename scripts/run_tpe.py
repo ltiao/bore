@@ -26,6 +26,11 @@ from utils import make_name, HyperOptLogs
 def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
          run_start, num_iterations, input_dir, output_dir):
 
+    benchmark = make_benchmark(benchmark_name,
+                               dimensions=dimensions,
+                               dataset_name=dataset_name,
+                               data_dir=input_dir)
+    space = benchmark.get_search_space()
     name = make_name(benchmark_name,
                      dimensions=dimensions,
                      dataset_name=dataset_name)
@@ -36,12 +41,6 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
     options = dict()
     with output_path.joinpath("options.yaml").open('w') as f:
         yaml.dump(options, f)
-
-    benchmark = make_benchmark(benchmark_name,
-                               dimensions=dimensions,
-                               dataset_name=dataset_name,
-                               input_dir=input_dir)
-    space = benchmark.get_search_space()
 
     def objective(kws):
         evaluation = benchmark(kws)
