@@ -1,7 +1,8 @@
 from .synthetic import (Branin, GoldsteinPrice, SixHumpCamel, StyblinskiTang,
                         Michalewicz, Hartmann3D, Hartmann6D)
 from .tabular import FCNet, FCNetAlt
-from .racing import RacingLine
+from .racing import (UCBF110RacingLine, ETHZORCARacingLine,
+                     ETHZMobilORCARacingLine)
 
 benchmarks = dict(
     branin=Branin,
@@ -13,7 +14,9 @@ benchmarks = dict(
     hartmann6d=Hartmann6D,
     fcnet=FCNet,
     fcnet_alt=FCNetAlt,
-    racing=RacingLine
+    ucb_f110_racing=UCBF110RacingLine,
+    ethz_orca_racing=ETHZORCARacingLine,
+    ethz_mobil_orca_racing=ETHZMobilORCARacingLine
 )
 
 
