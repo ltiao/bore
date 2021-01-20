@@ -7,52 +7,62 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from pathlib import Path
-from utils import GOLDEN_RATIO, WIDTH, size
-
-OUTPUT_DIR = "figures/"
+from utils import GOLDEN_RATIO, WIDTH, pt_to_in
 
 
 @click.command()
 @click.argument("name")
-@click.option('--num-iters', default=25)
-@click.option('--quantile', default=1/3)
+@click.argument("output_dir", default="figures/",
+                type=click.Path(file_okay=False, dir_okay=True))
+@click.option("--num-iterations", "-i", default=6)
+@click.option('--quantile', "-q", default=1/3)
+@click.option('--transparent', is_flag=True)
 @click.option('--context', default="paper")
 @click.option('--style', default="ticks")
 @click.option('--palette', default="muted")
-@click.option('--width', '-w', type=float, default=WIDTH)
+@click.option('--width', '-w', type=float, default=pt_to_in(WIDTH))
+@click.option('--height', '-h', type=float)
 @click.option('--aspect', '-a', type=float, default=GOLDEN_RATIO)
+@click.option('--dpi', type=float, default=300)
 @click.option('--extension', '-e', multiple=True, default=["png"])
-@click.option("--output-dir", default=OUTPUT_DIR,
-              type=click.Path(file_okay=False, dir_okay=True),
-              help="Output directory.")
-@click.option('--seed', default=42)
-def main(name, num_iters, quantile, context, style, palette, width, aspect,
-         extension, output_dir, seed):
+@click.option('--seed', '-s', default=42)
+def main(name, output_dir, num_iterations, quantile, transparent, context,
+         style, palette, width, height, aspect, dpi, extension, seed):
 
-    figsize = size(width, aspect)
-    suffix = f"{width:.0f}x{width/aspect:.0f}"
+    # preamble
+    if height is None:
+        height = width / aspect
+    # height *= num_iterations
+    # figsize = size(width, aspect)
+    figsize = (width, height)
+
+    suffix = f"{width*dpi:.0f}x{height*dpi:.0f}"
 
     rc = {
         "figure.figsize": figsize,
-        "font.serif": ['Times New Roman'],
+        "font.serif": ["Times New Roman"],
         "text.usetex": True,
     }
     sns.set(context=context, style=style, palette=palette, font="serif", rc=rc)
 
     output_path = Path(output_dir).joinpath(name)
     output_path.mkdir(parents=True, exist_ok=True)
+    # / preamble
+
+    grid_kws = {"height_ratios": (.9, .05), "hspace": .3}
 
     random_state = np.random.RandomState(seed)
 
-    Y = np.empty((num_iters, num_iters))
-    Z = np.empty((num_iters, num_iters), dtype=bool)
-    Q = np.empty((num_iters, num_iters))
+    Y = np.empty((num_iterations, num_iterations))
+    Z = np.empty((num_iterations, num_iterations), dtype=bool)
+    Q = np.empty((num_iterations, num_iterations))
     # %%
 
     ys = []
-    for i in range(num_iters):
+    for i in range(num_iterations):
 
-        y = random_state.randn()
+        eps = random_state.randn()
+        y = eps
         ys.append(y)
 
         a = np.asarray(ys)
@@ -67,46 +77,55 @@ def main(name, num_iters, quantile, context, style, palette, width, aspect,
     mask[np.triu_indices_from(mask, k=1)] = True
 
     # %%
-    fig, ax = plt.subplots()
+    fig, (ax, cbar_ax) = plt.subplots(2, gridspec_kw=grid_kws)
 
     sns.heatmap(Y, mask=mask, annot=True, fmt=".02f", linewidths=1.0,
-                cbar_kws=dict(orientation="horizontal"),
-                cmap="cividis_r", square=True, ax=ax)
+                cmap="winter_r", ax=ax, cbar_ax=cbar_ax,
+                cbar_kws={"orientation": "horizontal"})
 
-    ax.set_xlabel("index")
+    ax.set_xlabel(r"$n$")
     ax.set_ylabel("iteration")
 
+    plt.tight_layout()
+
     for ext in extension:
-        fig.savefig(output_path.joinpath(f"numerical_{context}_{suffix}.{ext}"))
+        fig.savefig(output_path.joinpath(f"numerical_{context}_{suffix}.{ext}"),
+                    dpi=dpi, transparent=transparent)
 
     plt.show()
 
     # %%
-    fig, ax = plt.subplots()
+    fig, (ax, cbar_ax) = plt.subplots(2, gridspec_kw=grid_kws)
 
     sns.heatmap(Q, mask=mask, annot=True, fmt=".02f", linewidths=1.0,
-                cbar_kws=dict(orientation="horizontal"),
-                cmap="cividis_r", square=True, ax=ax)
+                cmap="winter_r", ax=ax, cbar_ax=cbar_ax,
+                cbar_kws={"orientation": "horizontal"})
 
-    ax.set_xlabel("index")
+    ax.set_xlabel(r"$n$")
     ax.set_ylabel("iteration")
 
+    plt.tight_layout()
+
     for ext in extension:
-        fig.savefig(output_path.joinpath(f"quantiles_{context}_{suffix}.{ext}"))
+        fig.savefig(output_path.joinpath(f"quantiles_{context}_{suffix}.{ext}"),
+                    dpi=dpi, transparent=transparent)
 
     plt.show()
 
     # %%
-    fig, ax = plt.subplots()
+    fig, (ax, cbar_ax) = plt.subplots(2, gridspec_kw=grid_kws)
 
-    sns.heatmap(Z, mask=mask, cbar_kws=dict(orientation="horizontal"),
-                linewidths=1.0, cmap="cividis", square=True, ax=ax)
+    sns.heatmap(Z, mask=mask, linewidths=1.0, cmap="winter",
+                ax=ax, cbar_ax=cbar_ax, cbar_kws={"orientation": "horizontal"})
 
-    ax.set_xlabel("index")
+    ax.set_xlabel(r"$n$")
     ax.set_ylabel("iteration")
 
+    plt.tight_layout()
+
     for ext in extension:
-        fig.savefig(output_path.joinpath(f"binary_{context}_{suffix}.{ext}"))
+        fig.savefig(output_path.joinpath(f"labels_{context}_{suffix}.{ext}"),
+                    dpi=dpi, transparent=transparent)
 
     plt.show()
 
