@@ -27,6 +27,9 @@ class DenseConfigurationSpace(CS.ConfigurationSpace):
         self.size_sparse = size_sparse
         self.size_dense = size_dense
 
+    def get_dimensions(self, sparse=False):
+        return self.size_sparse if sparse else self.size_dense
+
     def sample_configuration(self, size=1):
         config = super(DenseConfigurationSpace, self).sample_configuration(size=size)
         return DenseConfiguration(self, values=config.get_dictionary())

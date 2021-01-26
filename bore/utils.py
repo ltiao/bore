@@ -21,6 +21,29 @@ def config_space_to_search_space(config_space, q=1):
     return search_space
 
 
+def config_space_to_domain(config_space):
+    """
+    Converts HpBandSter's ConfigurationSpace to GPyOpt's domain list of dicts
+    format.
+    """
+    space = []
+    for h in config_space.get_hyperparameters():
+
+        if isinstance(h, CS.OrdinalHyperparameter):
+            d = dict(name=h.name, type="discrete",
+                     domain=(0, len(h.sequence) - 1))
+        elif isinstance(h, CS.CategoricalHyperparameter):
+            d = dict(name=h.name, type="categorical",
+                     domain=[i for i, _ in enumerate(h.choices)])
+        elif isinstance(h, CS.UniformIntegerHyperparameter):
+            d = dict(name=h.name, type="discrete", domain=(h.lower, h.upper))
+        elif isinstance(h, CS.UniformFloatHyperparameter):
+            d = dict(name=h.name, type="continuous", domain=(h.lower, h.upper),
+                     dimensionality=1)
+        space.append(d)
+    return space
+
+
 def kwargs_to_config(kwargs, config_space):
 
     config = {}

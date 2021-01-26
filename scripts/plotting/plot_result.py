@@ -25,6 +25,7 @@ from pathlib import Path
 @click.option('--legend/--no-legend', default=True)
 @click.option('--ymin', type=float)
 @click.option('--ymax', type=float)
+@click.option('--ylabel', default="immediate regret")
 @click.option('--transparent', is_flag=True)
 @click.option('--context', default="paper")
 @click.option('--style', default="ticks")
@@ -36,7 +37,7 @@ from pathlib import Path
 @click.option('--extension', '-e', multiple=True, default=["png"])
 @click.option("--config-file", type=click.File('r'))
 def main(benchmark_name, input_dir, output_dir, num_runs, methods, ci,
-         duration_key, legend, ymin, ymax, transparent, context, style, 
+         duration_key, legend, ymin, ymax, ylabel, transparent, context, style,
          palette, width, height, aspect, dpi, extension, config_file):
 
     if height is None:
@@ -109,7 +110,7 @@ def main(benchmark_name, input_dir, output_dir, num_runs, methods, ci,
                  legend=legend, data=data, ax=ax)
 
     ax.set_xlabel("evaluations")
-    ax.set_ylabel("immediate regret")
+    ax.set_ylabel(ylabel)
 
     ax.set_yscale("log")
     ax.set_ylim(ymin, ymax)
@@ -132,8 +133,8 @@ def main(benchmark_name, input_dir, output_dir, num_runs, methods, ci,
                  ci=get_ci(ci), err_kws=dict(edgecolor='none'),
                  legend=legend, data=data_merged, ax=ax)
 
-    ax.set_xlabel("wall-clock time elapsed (s)")
-    ax.set_ylabel("simple regret")
+    ax.set_xlabel("wall-clock time elapsed [s]")
+    ax.set_ylabel(ylabel)
 
     ax.set_yscale("log")
 

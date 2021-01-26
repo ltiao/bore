@@ -24,7 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # TODO: copy to temporary dir rather then some unknown current dir
 COPY requirements*.txt ./
-RUN python -m pip install --no-cache-dir --upgrade pip==20.3.3 keyrings.alt==3.4.0 && \
+RUN python -m pip install --no-cache-dir --upgrade pip==21.0 keyrings.alt==3.4.0 && \
     python -m pip install --no-cache-dir -r requirements_dev.txt && \
     python -m pip install --no-cache-dir -r requirements.txt
 
@@ -36,6 +36,18 @@ COPY external/nas_benchmarks /tmp/nas_benchmarks
 # RUN python -m pip install --no-cache-dir hpbandster
 RUN python -m pip install --no-deps -e /tmp/HpBandSter && \
     python -m pip install --no-deps -e /tmp/nas_benchmarks
+
+# Install GPy and GPyOpt
+# RUN python -m pip install --no-cache-dir paramz==0.9.5
+# COPY external/GPy /tmp/GPy
+# COPY external/GPyOpt /tmp/GPyOpt
+# RUN python -m pip install --no-deps -e /tmp/GPy && \
+#     python -m pip install --no-deps -e /tmp/GPyOpt
+
+# Install BOTorch
+# RUN python -m pip install --no-cache-dir torch>=1.7 gpytorch>=1.3
+# COPY external/botorch /tmp/botorch
+# RUN python -m pip install --no-deps -e /tmp/botorch
 
 RUN mkdir -p /usr/src/app
 

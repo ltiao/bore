@@ -3,6 +3,7 @@ import tensorflow as tf
 import tensorflow.keras.backend as K
 
 from tensorflow.keras.losses import BinaryCrossentropy
+from tensorflow.keras.callbacks import EarlyStopping
 from scipy.optimize import minimize
 
 from ..data import Record
@@ -117,7 +118,7 @@ class RatioEstimator(base_config_generator):
         self.config_space = DenseConfigurationSpace(config_space, seed=seed)
         self.bounds = self.config_space.get_bounds()
 
-        input_dim = self.config_space.size_dense
+        input_dim = self.config_space.get_dimensions(sparse=False)
 
         self.input_dim = input_dim
         self.classifier_kws = classifier_kws
@@ -199,8 +200,14 @@ class RatioEstimator(base_config_generator):
                               f"(num_epochs={num_epochs}). "
                               f"Ignoring num_steps_per_iter={self.num_steps_per_iter}")
 
+        early_stopping = EarlyStopping(monitor="loss", min_delta=1e-3,
+                                       verbose=True, patience=5, mode="min")
+
+        callbacks = []
+        # callbacks.append(early_stopping)
+
         logit.fit(X, z, epochs=num_epochs, batch_size=self.batch_size,
-                  verbose=False)  # TODO(LT): Make this an argument
+                  callbacks=callbacks, verbose=False)  # TODO(LT): Make this an argument
         loss, accuracy = logit.evaluate(X, z, verbose=False)
 
         self.logger.info(f"[Model fit: loss={loss:.3f}, "
