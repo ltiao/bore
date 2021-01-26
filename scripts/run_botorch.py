@@ -90,9 +90,10 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
         Wrapper that receives and returns torch.Tensor
         """
         config = dict_from_tensor(tensor, cs=config_space)
-        res = - benchmark(config).value  # turn into maximization problem
+        # res = - benchmark(config).value  # turn into maximization problem
         # TODO(LT): specify dtype and device
-        return torch.tensor(res, requires_grad=False, device=device, dtype=dtype)
+        return torch.tensor(benchmark(config).value, requires_grad=False,
+                            device=device, dtype=dtype)
 
     # TODO(LT): make initial value option
     noise_variance = torch.tensor(1.0, device=device, dtype=dtype)
@@ -133,10 +134,11 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
 
                     # construct acquisition function
                     # TODO(LT): standardize?
-                    tau = torch.quantile(y, q=1-gamma).item()
+                    tau = torch.quantile(y, q=gamma).item()
                     iterations.set_postfix(tau=tau)
 
-                    ei = ExpectedImprovement(model=model, best_f=tau)
+                    ei = ExpectedImprovement(model=model, best_f=tau,
+                                             maximize=False)
 
                     # optimize acquisition function
                     cand, _ = optimize_acqf(acq_function=ei, bounds=bounds, q=1,
@@ -155,7 +157,7 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
                 delta = t - t_start
 
                 row = dict_from_tensor(x_new, cs=config_space)
-                row["loss"] = - y_new.item()
+                row["loss"] = y_new.item()
                 row["finished"] = delta.total_seconds()
                 rows.append(row)
 
