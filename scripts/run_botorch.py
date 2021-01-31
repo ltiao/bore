@@ -40,14 +40,14 @@ def create_bounds(bounds, device=None, dtype=None):
 @click.option("--num-runs", "-n", default=20)
 @click.option("--run-start", default=0)
 @click.option("--num-iterations", "-i", default=500)
-@click.option("--acquisition-name", default="EI")
-@click.option("--acquisition-optimizer-name", default="lbfgs",
-              type=click.Choice(["lbfgs", "DIRECT", "CMA"]))
-@click.option("--gamma", default=0.25, type=click.FloatRange(0., 1.),
+# @click.option("--acquisition-name", default="EI")
+# @click.option("--acquisition-optimizer-name", default="lbfgs",
+#               type=click.Choice(["lbfgs", "DIRECT", "CMA"]))
+@click.option("--gamma", default=0., type=click.FloatRange(0., 1.),
               help="Quantile, or mixing proportion.")
 @click.option("--num-random-init", default=10)
-@click.option('--use-ard', is_flag=True)
-@click.option('--use-input-warping', is_flag=True)
+# @click.option('--use-ard', is_flag=True)
+# @click.option('--use-input-warping', is_flag=True)
 @click.option("--input-dir", default="datasets/fcnet_tabular_benchmarks",
               type=click.Path(file_okay=False, dir_okay=True),
               help="Input data directory.")
@@ -55,9 +55,13 @@ def create_bounds(bounds, device=None, dtype=None):
               type=click.Path(file_okay=False, dir_okay=True),
               help="Output directory.")
 def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
-         run_start, num_iterations, acquisition_name,
-         acquisition_optimizer_name, gamma, num_random_init, use_ard,
-         use_input_warping, input_dir, output_dir):
+         run_start, num_iterations,
+         # acquisition_name,
+         # acquisition_optimizer_name,
+         gamma, num_random_init,
+         # use_ard,
+         # use_input_warping,
+         input_dir, output_dir):
 
     # TODO(LT): Turn into options
     # device = "cpu"
@@ -75,9 +79,10 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
     output_path = Path(output_dir).joinpath(name, method_name)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    options = dict(acquisition_name=acquisition_name,
-                   acquisition_optimizer_name=acquisition_optimizer_name,
-                   use_ard=use_ard, use_input_warping=use_input_warping)
+    options = dict(gamma=gamma, num_random_init=num_random_init)
+    # options = dict(acquisition_name=acquisition_name,
+    #                acquisition_optimizer_name=acquisition_optimizer_name,
+    #                use_ard=use_ard, use_input_warping=use_input_warping)
     with output_path.joinpath("options.yaml").open('w') as f:
         yaml.dump(options, f)
 
@@ -91,12 +96,11 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
         """
         config = dict_from_tensor(tensor, cs=config_space)
         # res = - benchmark(config).value  # turn into maximization problem
-        # TODO(LT): specify dtype and device
         return torch.tensor(benchmark(config).value, requires_grad=False,
                             device=device, dtype=dtype)
 
     # TODO(LT): make initial value option
-    noise_variance = torch.tensor(1.0, device=device, dtype=dtype)
+    noise_variance_init = 1e-3
 
     for run_id in trange(run_start, num_runs, unit="run"):
 
@@ -107,6 +111,8 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
         features = []
         targets = []
 
+        noise_variance = torch.tensor(noise_variance_init, device=device, dtype=dtype)
+
         with trange(num_iterations) as iterations:
 
             for i in iterations:
@@ -114,7 +120,6 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
                 if i < num_random_init:
                     # click.echo(f"Completed {i}/{num_random_init} initial runs. "
                     #            "Suggesting random candidate...")
-                    # TODO(LT): specify dtype and device
                     # TODO(LT): support random seed
                     x_new = torch.rand(size=(dim,), device=device, dtype=dtype)
                 else:
@@ -141,6 +146,7 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
                                              maximize=False)
 
                     # optimize acquisition function
+                    # TODO(LT): turn kwargs into command-line options
                     cand, _ = optimize_acqf(acq_function=ei, bounds=bounds, q=1,
                                             num_restarts=3, raw_samples=512,
                                             options=dict(batch_limit=5, maxiter=200))
