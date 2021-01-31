@@ -12,6 +12,7 @@ from botorch.acquisition import ExpectedImprovement
 from botorch.optim import optimize_acqf
 from botorch.utils import standardize
 from botorch.utils.sampling import draw_sobol_samples
+# from sklearn.preprocessing import StandardScaler
 
 from pathlib import Path
 from tqdm import trange
@@ -123,14 +124,17 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
                     # TODO(LT): support random seed
                     x_new = torch.rand(size=(dim,), device=device, dtype=dtype)
                 else:
+                    # scaler = StandardScaler()
+
                     # construct dataset
                     X = torch.vstack(features)
                     y = torch.hstack(targets).unsqueeze(axis=-1)
+                    z = standardize(y)
 
-                    # TODO(LT): persist model state, target standardization
+                    # TODO(LT): persist model state
                     # construct model
                     # model = FixedNoiseGP(X, standardize(y), noise_variance.expand_as(y),
-                    model = FixedNoiseGP(X, y, noise_variance.expand_as(y),
+                    model = FixedNoiseGP(X, z, noise_variance.expand_as(y),
                                          input_transform=None).to(X)
                     mll = ExactMarginalLogLikelihood(model.likelihood, model)
 
@@ -139,7 +143,7 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
 
                     # construct acquisition function
                     # TODO(LT): standardize?
-                    tau = torch.quantile(y, q=gamma).item()
+                    tau = torch.quantile(z, q=gamma).item()
                     iterations.set_postfix(tau=tau)
 
                     ei = ExpectedImprovement(model=model, best_f=tau,
