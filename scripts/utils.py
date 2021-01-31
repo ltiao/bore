@@ -8,7 +8,7 @@ def make_name(benchmark_name, dimensions=None, dataset_name=None):
     if benchmark_name.startswith("fcnet"):
         assert dataset_name is not None, "must specify dataset name"
         name = f"fcnet_{dataset_name}"
-    elif benchmark_name in ["michalewicz", "styblinski_tang"]:
+    elif benchmark_name in ("michalewicz", "styblinski_tang", "rosenbrock", "ackley"):
         assert dimensions is not None, "must specify dimensions"
         name = f"{benchmark_name}_{dimensions:03d}d"
     else:

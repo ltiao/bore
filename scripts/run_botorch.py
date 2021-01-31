@@ -85,7 +85,7 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
     bounds = create_bounds(config_space.get_bounds(), device=device, dtype=dtype)
     dim = config_space.get_dimensions()
 
-    def objective(tensor, *args, **kwargs):
+    def func(tensor, *args, **kwargs):
         """
         Wrapper that receives and returns torch.Tensor
         """
@@ -147,7 +147,7 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
                     x_new = cand.squeeze(axis=0)
 
                 # evaluate blackbox objective
-                y_new = objective(x_new)
+                y_new = func(x_new)
 
                 # update dataset
                 features.append(x_new)

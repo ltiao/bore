@@ -1,5 +1,6 @@
-from .synthetic import (Branin, GoldsteinPrice, SixHumpCamel, StyblinskiTang,
-                        Michalewicz, Hartmann3D, Hartmann6D)
+from .synthetic import (Ackley, Branin, GoldsteinPrice, Rosenbrock,
+                        SixHumpCamel, StyblinskiTang, Michalewicz, Hartmann3D,
+                        Hartmann6D)
 from .tabular import FCNet, FCNetAlt
 from .racing import (UCBF110RacingLine, ETHZORCARacingLine,
                      ETHZMobilORCARacingLine)
@@ -8,6 +9,8 @@ benchmarks = dict(
     branin=Branin,
     goldstein_price=GoldsteinPrice,
     six_hump_camel=SixHumpCamel,
+    ackley=Ackley,
+    rosenbrock=Rosenbrock,
     styblinski_tang=StyblinskiTang,
     michalewicz=Michalewicz,
     hartmann3d=Hartmann3D,
@@ -32,7 +35,7 @@ def make_benchmark(benchmark_name, dimensions=None, dataset_name=None,
         kws["dataset_name"] = dataset_name
         kws["data_dir"] = data_dir
 
-    if benchmark_name in ["michalewicz", "styblinski_tang"]:
+    if benchmark_name in ("michalewicz", "styblinski_tang", "rosenbrock", "ackley"):
         assert dimensions is not None, "must specify dimensions"
         kws["dimensions"] = dimensions
 

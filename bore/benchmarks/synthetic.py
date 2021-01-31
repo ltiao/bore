@@ -2,6 +2,7 @@ import numpy as np
 import ConfigSpace as CS
 
 from .base import Benchmark, Evaluation
+from scipy.optimize import rosen
 
 
 class Forrester(Benchmark):
@@ -104,6 +105,26 @@ class Ackley(Benchmark):
         for d in range(self.dimensions):
             cs.add_hyperparameter(
                 CS.UniformFloatHyperparameter(f"x{d}", lower=-32.768, upper=32.768))
+        return cs
+
+
+class Rosenbrock(Benchmark):
+
+    def __init__(self, dimensions):
+        self.dimensions = dimensions
+
+    def __call__(self, kwargs, budget=None):
+        x = np.hstack([kwargs.get(f"x{d}") for d in range(self.dimensions)])
+        return Evaluation(value=rosen(x), duration=None)
+
+    def get_minimum(self):
+        return 0.
+
+    def get_config_space(self):
+        cs = CS.ConfigurationSpace()
+        for d in range(self.dimensions):
+            cs.add_hyperparameter(
+                CS.UniformFloatHyperparameter(f"x{d}", lower=-5., upper=10.))
         return cs
 
 
