@@ -22,6 +22,22 @@ minimize_multi_start = multi_start(minimizer_fn=minimize)
 minimize_random_start = random_start(minimizer_fn=minimize)
 
 
+def maybe_distort(loc, distortion=None, bounds=None, random_state=None,
+                  print_fn=print):
+
+    if distortion is None:
+        return loc
+
+    assert bounds is not None, "must specify bounds!"
+    ret = truncated_normal(loc=loc,
+                           scale=distortion,
+                           lower=bounds.lb,
+                           upper=bounds.ub).rvs(random_state=random_state)
+    print_fn(f"Suggesting x={ret} (after applying distortion={distortion:.3E})")
+
+    return ret
+
+
 class BORE(HyperBand):
 
     def __init__(self, config_space, eta=3, min_budget=0.01, max_budget=1,
@@ -326,18 +342,9 @@ class RatioEstimator(base_config_generator):
 
         loc = opt.x
         self.logger.info(f"[Glob. maximum: value={-opt.fun:.3f} x={loc}]")
-
-        if self.distortion is None:
-            config_opt_arr = loc
-        else:
-            dist = truncated_normal(loc=loc,
-                                    scale=self.distortion,
-                                    lower=self.bounds.lb,
-                                    upper=self.bounds.ub)
-            config_opt_arr = dist.rvs(random_state=self.random_state)
-            self.logger.info(f"Suggesting x={config_opt_arr} "
-                             f"(distortion={self.distortion:.3E})")
-
+        config_opt_arr = maybe_distort(loc, self.distortion,
+                                       self.bounds, self.random_state,
+                                       print_fn=self.logger.info)
         config_opt_dict = self._dict_from_array(config_opt_arr)
 
         return (config_opt_dict, {})
