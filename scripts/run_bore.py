@@ -31,7 +31,8 @@ logging.basicConfig(level=logging.DEBUG)
 @click.option("--num-random-init", default=10)
 @click.option("--random-rate", default=0.1, type=click.FloatRange(0., 1.))
 @click.option('--retrain/--no-retrain', default=False)
-@click.option("--num-start-points", default=3)
+@click.option("--num-starts", default=5)
+@click.option("--num-samples", default=512)
 @click.option("--batch-size", default=64)
 @click.option("--num-steps-per-iter", default=100)
 @click.option("--num-epochs", type=int)
@@ -53,10 +54,10 @@ logging.basicConfig(level=logging.DEBUG)
               help="Output directory.")
 def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
          run_start, num_iterations, eta, min_budget, max_budget, gamma,
-         num_random_init, random_rate, retrain, num_start_points, batch_size,
-         num_steps_per_iter, num_epochs, optimizer, num_layers, num_units,
-         activation, transform, method, max_iter, ftol, distortion, restart,
-         input_dir, output_dir):
+         num_random_init, random_rate, retrain, num_starts, num_samples,
+         batch_size, num_steps_per_iter, num_epochs, optimizer,
+         num_layers, num_units, activation, transform, method, max_iter, ftol,
+         distortion, restart, input_dir, output_dir):
 
     benchmark = make_benchmark(benchmark_name,
                                dimensions=dimensions,
@@ -72,9 +73,10 @@ def main(benchmark_name, dataset_name, dimensions, method_name, num_runs,
     options = dict(eta=eta, min_budget=min_budget, max_budget=max_budget,
                    gamma=gamma, num_random_init=num_random_init,
                    random_rate=random_rate, retrain=retrain,
-                   num_start_points=num_start_points, batch_size=batch_size,
-                   num_steps_per_iter=num_steps_per_iter, num_epochs=num_epochs,
-                   optimizer=optimizer, num_layers=num_layers, num_units=num_units,
+                   num_starts=num_starts, num_samples=num_samples,
+                   batch_size=batch_size, num_steps_per_iter=num_steps_per_iter,
+                   num_epochs=num_epochs, optimizer=optimizer,
+                   num_layers=num_layers, num_units=num_units,
                    activation=activation, transform=transform, method=method,
                    max_iter=max_iter, ftol=ftol, distortion=distortion,
                    restart=restart)

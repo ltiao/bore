@@ -14,10 +14,10 @@ class MaximizableSequential(MaximizableMixin, Sequential):
 
 class DenseMaximizableSequential(MaximizableMixin, Sequential):
 
-    def __init__(self, input_dim, output_dim, num_layers, num_units,
+    def __init__(self, transform, input_dim, output_dim, num_layers, num_units,
                  layer_kws={}, final_layer_kws={}):
 
-        super(DenseMaximizableSequential, self).__init__()
+        super(DenseMaximizableSequential, self).__init__(transform=transform)
 
         for i in range(num_layers):
             if not i:

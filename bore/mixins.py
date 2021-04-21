@@ -5,20 +5,21 @@ from scipy.optimize import minimize
 from .optimizers import multi_start
 from .engine import convert
 
-minimize_multi_start = multi_start(minimizer_fn=minimize)
+multi_start_minimize = multi_start(minimizer_fn=minimize)
 
 
 class MaximizableMixin:
 
     def __init__(self, transform=tf.identity, *args, **kwargs):
         super(MaximizableMixin, self).__init__(*args, **kwargs)
-        self.func = convert(self, transform=lambda u: - transform(u))
+        self._func = convert(self, transform=lambda u: - transform(u))
 
-    def maxima(self, bounds, num_start_points=3, method="L-BFGS-B",
+    def maxima(self, bounds, num_starts=3, num_samples=512, method="L-BFGS-B",
                options=dict(maxiter=200, ftol=1e-9), random_state=None):
 
-        return minimize_multi_start(self.func, bounds=bounds,
-                                    num_restarts=num_start_points,
+        return multi_start_minimize(self._func, bounds=bounds,
+                                    num_starts=num_starts,
+                                    num_samples=num_samples,
                                     random_state=random_state,
                                     method=method, jac=True, options=options)
 
@@ -36,12 +37,12 @@ class MaximizableMixin:
                      f"iterations: {res.nit:02d}, "
                      f"status: {res.status} ({res.message})")
 
-            # TODO(LT): Create Enum type for these status codes
-            # status == 1 signifies maximum iteration reached, which we don't
-            # want to treat as a failure condition.
+            # TODO(LT): Create Enum type for these status codes `status == 1`
+            # signifies maximum iteration reached, which we don't want to
+            # treat as a failure condition.
             if (res.success or res.status == 1):
-                # and not self.record.is_duplicate(res.x):
+                # TODO(LT): Support callback to eliminate duplicates
                 if res_best is None or res.fun < res_best.fun:
                     res_best = res
 
-        return res_best.x
+        return res_best

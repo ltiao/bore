@@ -190,10 +190,28 @@ def main(name, gamma, estimation, output_dir, transparent, context, style,
 
     fig, ax1 = plt.subplots()
 
-    ax1.plot(X_grid.squeeze(axis=-1),
-             r.top.prob(X_grid).numpy().squeeze(axis=-1), label=r"$\ell(x)$")
-    ax1.plot(X_grid.squeeze(axis=-1),
-             r.bot.prob(X_grid).numpy().squeeze(axis=-1), label=r"$g(x)$")
+    l, = ax1.plot(X_grid.squeeze(axis=-1),
+                  r.top.prob(X_grid).numpy().squeeze(axis=-1), label=r"$\ell(x)$")
+    g, = ax1.plot(X_grid.squeeze(axis=-1),
+                  r.bot.prob(X_grid).numpy().squeeze(axis=-1), label=r"$g(x)$")
+
+    ax1.annotate(r"$\mathcal{N}(0, 1)$",
+                 xy=(-4.3, 0.22),
+                 xycoords='data', xytext=(1, 1),
+                 color=l.get_color(),
+                 textcoords='offset points', fontsize="small",
+                 # arrowprops=dict(facecolor='black', shrink=0.05),
+                 # bbox=dict(boxstyle="round", fc="none"),
+                 horizontalalignment='left', verticalalignment='top')
+
+    ax1.annotate(r"$\mathcal{N}(0.5, 1)$",
+                 xy=(1.4, 0.35),
+                 xycoords='data', xytext=(1, 1),
+                 color=g.get_color(),
+                 textcoords='offset points', fontsize="small",
+                 # arrowprops=dict(facecolor='black', shrink=0.05),
+                 # bbox=dict(boxstyle="round", fc="none"),
+                 horizontalalignment='left', verticalalignment='top')
 
     ax1.set_xlabel(r'$x$')
     ax1.set_ylabel('density')
@@ -210,13 +228,31 @@ def main(name, gamma, estimation, output_dir, transparent, context, style,
 
     fig, ax2 = plt.subplots()
 
-    ax2.plot(X_grid.squeeze(axis=-1),
-             r.ratio(X_grid).numpy().squeeze(axis=-1), label=r"$r_0(x)$",
-             color="tab:orange")
-    ax2.plot(X_grid.squeeze(axis=-1),
-             gamma_relative_density_ratio(r.ratio(X_grid), gamma=gamma)
-                   .numpy().squeeze(axis=-1), label=fr"$r_{{{gamma:.2f}}}(x)$",
-             color="tab:green")
+    foo, = ax2.plot(X_grid.squeeze(axis=-1),
+                    r.ratio(X_grid).numpy().squeeze(axis=-1), label=r"$r_0(x)$",
+                    color="tab:orange")
+    bar, = ax2.plot(X_grid.squeeze(axis=-1),
+                    gamma_relative_density_ratio(r.ratio(X_grid), gamma=gamma)
+                    .numpy().squeeze(axis=-1), label=fr"$r_{{{gamma:.2f}}}(x)$",
+                    color="tab:green")
+
+    ax2.annotate(r"$\gamma=0$",
+                 xy=(-4.3, r.ratio([-4.3]).numpy().squeeze(axis=-1)),
+                 xycoords='data', xytext=(4, 2),
+                 color=foo.get_color(),
+                 textcoords='offset points', fontsize="small",
+                 # arrowprops=dict(facecolor='black', shrink=0.05),
+                 # bbox=dict(boxstyle="round", fc="none"),
+                 horizontalalignment='left', verticalalignment='top')
+
+    ax2.annotate(r"$\gamma=\frac{1}{4}$",
+                 xy=(-4.8, 1.5),
+                 xycoords='data', xytext=(1, 1),
+                 color=bar.get_color(),
+                 textcoords='offset points', fontsize="small",
+                 # arrowprops=dict(facecolor='black', shrink=0.05),
+                 # bbox=dict(boxstyle="round", fc="none"),
+                 horizontalalignment='left', verticalalignment='top')
 
     # ax2.set_ylim(-0.1, 5.0)
 

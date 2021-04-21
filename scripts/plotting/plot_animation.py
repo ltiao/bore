@@ -1,9 +1,10 @@
 import sys
 import click
 
-import tensorflow as tf
 import numpy as np
 import pandas as pd
+
+import tensorflow as tf
 
 import matplotlib.pyplot as plt
 import seaborn as sns
@@ -83,6 +84,7 @@ def main(name, output_dir, num_iterations, gamma, batch_size, num_epochs,
     cs = benchmark.get_config_space()
     hx = cs.get_hyperparameter("x")
     bounds = Bounds(lb=[hx.lower], ub=[hx.upper])
+
     X_grid = np.linspace(hx.lower, hx.upper, num_index_points).reshape(-1, num_features)
     y_grid = benchmark.func(X_grid)
 
