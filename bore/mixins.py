@@ -16,14 +16,14 @@ class MaximizableMixin:
 
     def maxima(self, bounds, num_starts=3, num_samples=512, method="L-BFGS-B",
                options=dict(maxiter=200, ftol=1e-9), random_state=None):
-
         return multi_start_minimize(self._func, bounds=bounds,
                                     num_starts=num_starts,
                                     num_samples=num_samples,
                                     random_state=random_state,
                                     method=method, jac=True, options=options)
 
-    def argmax(self, bounds, print_fn=print, *args, **kwargs):
+    def argmax(self, bounds, print_fn=print, filter_fn=lambda res: True,
+               *args, **kwargs):
 
         # Equivalent to:
         # res_best = min(filter(lambda res: res.success or res.status == 1,
@@ -40,8 +40,7 @@ class MaximizableMixin:
             # TODO(LT): Create Enum type for these status codes `status == 1`
             # signifies maximum iteration reached, which we don't want to
             # treat as a failure condition.
-            if (res.success or res.status == 1):
-                # TODO(LT): Support callback to eliminate duplicates
+            if (res.success or res.status == 1) and filter_fn(res):
                 if res_best is None or res.fun < res_best.fun:
                     res_best = res
 

@@ -234,6 +234,12 @@ class RatioEstimator(base_config_generator):
             del self.logit
             self.logit = None  # reset
 
+    def _is_unique(self, res):
+        is_duplicate = self.record.is_duplicate(res.x)
+        if is_duplicate:
+            self.logger.warn("Duplicate detected! Skipping...")
+        return not is_duplicate
+
     def get_config(self, budget):
 
         dataset_size = self.record.size()
@@ -271,11 +277,8 @@ class RatioEstimator(base_config_generator):
                                 options=dict(maxiter=self.max_iter,
                                              ftol=self.ftol),
                                 print_fn=self.logger.debug,
+                                filter_fn=self._is_unique,
                                 random_state=self.random_state)
-
-        # Delete classifier (if retraining from scratch every iteration)
-        self._maybe_delete_classifier()
-
         if opt is None:
             # TODO(LT): It's actually important to report which of these
             # failures occurred...
@@ -291,6 +294,9 @@ class RatioEstimator(base_config_generator):
                                        self.bounds, self.random_state,
                                        print_fn=self.logger.info)
         config_opt_dict = self._dict_from_array(config_opt_arr)
+
+        # Delete classifier (if retraining from scratch every iteration)
+        self._maybe_delete_classifier()
 
         return (config_opt_dict, {})
 
