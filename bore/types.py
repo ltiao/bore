@@ -35,32 +35,6 @@ class DenseConfigurationSpace(CS.ConfigurationSpace):
         return DenseConfiguration(self, values=config.get_dictionary())
 
     def get_bounds(self):
-
-        # lowers = []
-        # uppers = []
-        # for hp in self.get_hyperparameters():
-        #     if isinstance(hp, CS.CategoricalHyperparameter):
-        #         cat_size = hp.num_choices
-        #         for i in range(cat_size):
-        #             lowers.append(0.)
-        #             uppers.append(1.)
-        #     elif isinstance(hp, CS.UniformFloatHyperparameter):
-        #         lowers.append(hp._inverse_transform(hp.lower))
-        #         uppers.append(hp._inverse_transform(hp.upper))
-        #     elif isinstance(hp, CS.UniformIntegerHyperparameter):
-        #         lowers.append(hp._inverse_transform(hp.lower - 1))
-        #         uppers.append(hp._inverse_transform(hp.upper + 1))
-        #     else:
-        #         raise NotImplementedError(
-        #             "Only hyperparameters of types "
-        #             "`CategoricalHyperparameter`, "
-        #             "`UniformIntegerHyperparameter`, "
-        #             "`UniformFloatHyperparameter` are supported!")
-        # assert len(lowers) == self.size_dense
-        # assert len(uppers) == self.size_dense
-
-        # All of the above commented code is equivalent to the following two
-        # lines...
         lowers = np.zeros(self.size_dense)
         uppers = np.ones(self.size_dense)
 
