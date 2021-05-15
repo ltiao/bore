@@ -1,4 +1,3 @@
-import pandas as pd
 import numpy as np
 
 
@@ -35,10 +34,10 @@ class Record:
         z = np.less(y, tau)
         return X, z
 
-    def to_dataframe(self):
-        frame = pd.DataFrame(data=self.features).assign(budget=self.budgets,
-                                                        loss=self.targets)
-        return frame
+    # def to_dataframe(self):
+    #     frame = pd.DataFrame(data=self.features).assign(budget=self.budgets,
+    #                                                     loss=self.targets)
+    #     return frame
 
     def is_duplicate(self, x, rtol=1e-5, atol=1e-8):
         # Clever ways of doing this would involve data structs. like KD-trees

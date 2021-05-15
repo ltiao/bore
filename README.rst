@@ -33,3 +33,23 @@ This package was created with Cookiecutter_ and the `audreyr/cookiecutter-pypack
 
 .. _Cookiecutter: https://github.com/audreyr/cookiecutter
 .. _`audreyr/cookiecutter-pypackage`: https://github.com/audreyr/cookiecutter-pypackage
+
+Citation
+--------
+
+- L. Tiao, A. Klein, C. Archambeau, E. V. Bonilla, M. Seeger, and F. Ramos. Bayesian Optimization by
+Density-Ratio Estimation. In Proceedings of the 38th International Conference on Machine Learning
+(ICML2021), Virtual (Online), July 2021.
+
+Natbib:
+
+.. code-block::
+
+  @inproceedings{tiao2021-bore,
+    title={{B}ayesian {O}ptimization by {D}ensity-{R}atio {E}stimation},
+    author={Tiao, Louis and Klein, Aaron and Archambeau, C\'{e}dric and Bonilla, Edwin V and Seeger, Matthias and Ramos, Fabio},
+    booktitle={Proceedings of the 38th International Conference on Machine Learning (ICML2021)},
+    address={Virtual (Online)},
+    year={2021},
+    month={July}
+  }

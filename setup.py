@@ -10,7 +10,12 @@ with open('README.rst') as readme_file:
 with open('HISTORY.rst') as history_file:
     history = history_file.read()
 
-requirements = []
+requirements = [
+    "cython>=0.29.23",
+    "numpy>=1.20.3",
+    "scipy>=1.6.3",
+    "ConfigSpace>=0.4.18",
+]
 
 setup_requirements = ['pytest-runner', ]
 
@@ -31,13 +36,9 @@ setup(
         'Programming Language :: Python :: 3.7',
         'Programming Language :: Python :: 3.8',
     ],
-    description="Bayesian Optimization as Density Ratio Estimation",
-    entry_points={
-        'console_scripts': [
-            'bore=bore.cli:main',
-        ],
-    },
+    description="Bayesian Optimization by Density-Ratio Estimation",
     install_requires=requirements,
+    extras_require={"hpbandster": ["hpbandster==0.7.4"]},
     license="MIT license",
     long_description=readme + '\n\n' + history,
     include_package_data=True,
