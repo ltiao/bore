@@ -66,8 +66,7 @@ def main(benchmark_name, input_dir, output_dir, num_runs, methods, ci,
     if legend:
         legend = "auto"
 
-    loss_min = None
-    # get_loss_min(benchmark_name, data_dir="datasets/fcnet_tabular_benchmarks")
+    loss_min = get_loss_min(benchmark_name, data_dir="datasets/fcnet_tabular_benchmarks")
 
     frames = []
     frames_merged = []
@@ -86,12 +85,12 @@ def main(benchmark_name, input_dir, output_dir, num_runs, methods, ci,
             frame = load_frame(path, run, loss_min=loss_min,
                                duration_key=duration_key)
             frames.append(frame.assign(method=method))
-            series[run] = extract_series(frame, index="elapsed", column="best")
+            series[run] = extract_series(frame, index="elapsed", column="regret")
 
-        frame_merged = merge_stack_series(series, y_key="best")
+        frame_merged = merge_stack_series(series, y_key="regret")
         frames_merged.append(frame_merged.assign(method=method))
 
-    data = pd.concat(frames, axis="index", ignore_index=True, sort=True)
+    data = pd.concat(frames, axis="index", ignore_index=True, sort=True)  # .query("evaluation < 500")
     data = sanitize(data, mapping=method_names_mapping)
 
     data_merged = pd.concat(frames_merged, axis="index", ignore_index=True, sort=True)
@@ -102,7 +101,7 @@ def main(benchmark_name, input_dir, output_dir, num_runs, methods, ci,
     fig, ax = plt.subplots()
     sns.despine(fig=fig, ax=ax, top=True)
 
-    sns.lineplot(x="evaluation", y="best",
+    sns.lineplot(x="evaluation", y="regret",
                  hue="method",  # hue_order=hue_order,
                  style="method",  # style_order=style_order,
                  # units="run", estimator=None,
@@ -112,7 +111,7 @@ def main(benchmark_name, input_dir, output_dir, num_runs, methods, ci,
     ax.set_xlabel("evaluations")
     ax.set_ylabel(ylabel)
 
-    # ax.set_yscale("log")
+    ax.set_yscale("log")
     ax.set_ylim(ymin, ymax)
 
     plt.tight_layout()
@@ -121,12 +120,12 @@ def main(benchmark_name, input_dir, output_dir, num_runs, methods, ci,
         fig.savefig(output_path.joinpath(f"regret_iterations_{context}_{suffix}.{ext}"),
                     dpi=dpi, transparent=transparent)
 
-    plt.show()
+    plt.clf()
 
     fig, ax = plt.subplots()
     sns.despine(fig=fig, ax=ax, top=True)
 
-    sns.lineplot(x="elapsed", y="best",
+    sns.lineplot(x="elapsed", y="regret",
                  hue="method",  # hue_order=hue_order,
                  style="method",  # style_order=style_order,
                  # units="run", estimator=None,
@@ -136,7 +135,7 @@ def main(benchmark_name, input_dir, output_dir, num_runs, methods, ci,
     ax.set_xlabel("wall-clock time elapsed [s]")
     ax.set_ylabel(ylabel)
 
-    # ax.set_yscale("log")
+    ax.set_yscale("log")
 
     plt.tight_layout()
 
@@ -144,7 +143,7 @@ def main(benchmark_name, input_dir, output_dir, num_runs, methods, ci,
         fig.savefig(output_path.joinpath(f"regret_elapsed_{context}_{suffix}.{ext}"),
                     dpi=dpi, transparent=transparent)
 
-    plt.show()
+    plt.clf()
 
     # # g = sns.relplot(x="elapsed", y="regret", hue="run",
     # #                 col="method", palette="tab20",
