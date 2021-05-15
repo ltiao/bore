@@ -26,22 +26,35 @@ Features
 
 * TODO
 
-Credits
+Authors
 -------
 
-This package was created with Cookiecutter_ and the `audreyr/cookiecutter-pypackage`_ project template.
+Lead Developers
++++++++++++++++
 
-.. _Cookiecutter: https://github.com/audreyr/cookiecutter
-.. _`audreyr/cookiecutter-pypackage`: https://github.com/audreyr/cookiecutter-pypackage
++------------------+----------------------------+
+| |tiao|           | |placeholder|              |
++------------------+----------------------------+
+| Louis Tiao       | Aaron Klein                |
++------------------+----------------------------+
+| https://tiao.io/ | https://aaronkl.github.io/ |
++------------------+----------------------------+
 
-Citation
---------
+.. |tiao| image:: http://gravatar.com/avatar/d8b59298191057fa164edf80f0743fcc?s=120
+   :align: middle
+.. |placeholder| image:: https://via.placeholder.com/120
+   :align: middle
 
-- L. Tiao, A. Klein, C. Archambeau, E. V. Bonilla, M. Seeger, and F. Ramos. Bayesian Optimization by
-Density-Ratio Estimation. In Proceedings of the 38th International Conference on Machine Learning
-(ICML2021), Virtual (Online), July 2021.
+Reference
+---------
 
-Natbib:
+.. [1] L. Tiao, A. Klein, C. Archambeau, E. V. Bonilla, M. Seeger, and F. Ramos. 
+  BORE: Bayesian Optimization by Density-Ratio Estimation. 
+  In Proceedings of the 38th International Conference on Machine Learning (ICML2021), 
+  Virtual (Online), July 2021.
+
+Cite as
++++++++
 
 .. code-block::
 
