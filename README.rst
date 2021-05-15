@@ -1,5 +1,5 @@
 =======================================================
-BORE: Bayesian Optimization as Density Ratio Estimation
+BORE: Bayesian Optimization as Density-Ratio Estimation
 =======================================================
 
 
@@ -21,6 +21,9 @@ BORE: Bayesian Optimization as Density Ratio Estimation
 * Free software: MIT license
 * Documentation: https://bore.readthedocs.io.
 
+A reference implementation of BORE (Bayesian Optimization as Density-Ratio Estimation)[1]_
+in Python3, TensorFlow2.
+
 Features
 --------
 
@@ -33,7 +36,7 @@ Lead Developers
 +++++++++++++++
 
 +------------------+----------------------------+
-| |tiao|           | |placeholder|              |
+| |tiao|           | |klein|                    |
 +------------------+----------------------------+
 | Louis Tiao       | Aaron Klein                |
 +------------------+----------------------------+
@@ -42,7 +45,7 @@ Lead Developers
 
 .. |tiao| image:: http://gravatar.com/avatar/d8b59298191057fa164edf80f0743fcc?s=120
    :align: middle
-.. |placeholder| image:: https://via.placeholder.com/120
+.. |klein| image:: https://via.placeholder.com/120
    :align: middle
 
 Reference

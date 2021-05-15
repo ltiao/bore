@@ -11,10 +11,10 @@ with open('HISTORY.rst') as history_file:
     history = history_file.read()
 
 requirements = [
-    "cython>=0.29.23",
-    "numpy>=1.20.3",
-    "scipy>=1.6.3",
-    "ConfigSpace>=0.4.18",
+    "cython==0.29.23",
+    "numpy==1.19.5",
+    "scipy==1.6.3",
+    "ConfigSpace==0.4.18",
 ]
 
 setup_requirements = ['pytest-runner', ]
@@ -38,7 +38,9 @@ setup(
     ],
     description="Bayesian Optimization by Density-Ratio Estimation",
     install_requires=requirements,
-    extras_require={"hpbandster": ["hpbandster==0.7.4"]},
+    extras_require={"hpbandster": ["hpbandster==0.7.4"],
+                    "tf": ["tensorflow==2.5.0"],
+                    "tf-gpu": ["tensorflow-gpu==2.5.0"]},
     license="MIT license",
     long_description=readme + '\n\n' + history,
     include_package_data=True,
