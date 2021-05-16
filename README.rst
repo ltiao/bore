@@ -2,7 +2,6 @@
 BORE: Bayesian Optimization as Density-Ratio Estimation
 =======================================================
 
-
 .. image:: https://img.shields.io/pypi/v/bore.svg
         :target: https://pypi.python.org/pypi/bore
 
@@ -13,7 +12,6 @@ BORE: Bayesian Optimization as Density-Ratio Estimation
         :target: https://bore.readthedocs.io/en/latest/?badge=latest
         :alt: Documentation Status
 
-
 .. image:: https://pyup.io/repos/github/ltiao/bore/shield.svg
      :target: https://pyup.io/repos/github/ltiao/bore/
      :alt: Updates
@@ -21,22 +19,24 @@ BORE: Bayesian Optimization as Density-Ratio Estimation
 A minimalistic implementation of BORE: Bayesian Optimization as Density-Ratio Estimation [1]_
 in Python 3 and TensorFlow 2.
 
+|featured|
+
 Getting Started
 ---------------
 
-Install my-project with npm
+Install with ``pip``:
 
 .. code-block:: bash
 
   $ pip install bore[tf]
 
-With GPU acceleration:
+With support for GPU accelaration:
 
 .. code-block:: bash
 
   $ pip install bore[tf-gpu]
 
-With support for HpBandSter plugin 
+With support for HpBandSter plugin: 
 
 .. code-block:: bash
 
@@ -118,10 +118,6 @@ Lead Developers:
 | https://tiao.io/ | https://aaronkl.github.io/ |
 +------------------+----------------------------+
 
-.. |tiao| image:: http://gravatar.com/avatar/d8b59298191057fa164edf80f0743fcc?s=120
-   :align: middle
-.. |klein| image:: https://via.placeholder.com/120
-   :align: middle
 
 Reference
 ---------
@@ -169,3 +165,10 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+.. |tiao| image:: http://gravatar.com/avatar/d8b59298191057fa164edf80f0743fcc?s=120
+   :align: middle
+.. |klein| image:: https://via.placeholder.com/120
+   :align: middle
+.. |featured| image:: docs/_static/header_1000x618.png
+   :align: middle
