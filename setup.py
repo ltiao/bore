@@ -11,9 +11,9 @@ with open('HISTORY.rst') as history_file:
     history = history_file.read()
 
 requirements = [
-    "cython==0.29.23",
     "numpy==1.19.5",
     "scipy==1.6.3",
+    "Cython==0.29.23",
     "ConfigSpace==0.4.18",
 ]
 
