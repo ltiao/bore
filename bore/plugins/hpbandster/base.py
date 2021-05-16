@@ -10,10 +10,10 @@ from hpbandster.optimizers.hyperband import HyperBand
 from hpbandster.core.base_config_generator import base_config_generator
 
 from .types import DenseConfigurationSpace, DenseConfiguration
-from ..data import Record
-from ..engine import truncated_normal
-from ..models import DenseMaximizableSequential
-from ..optimizers import multi_start
+from ...data import Record
+from ...engine import truncated_normal
+from ...models import DenseMaximizableSequential
+from ...optimizers import multi_start
 
 
 TRANSFORMS = dict(identity=tf.identity, sigmoid=tf.sigmoid, exp=tf.exp)
@@ -302,7 +302,7 @@ class ClassifierConfigGenerator(base_config_generator):
 
     def new_result(self, job, update_model=True):
 
-        super(ClassifierGenerator, self).new_result(job)
+        super(ClassifierConfigGenerator, self).new_result(job)
 
         # TODO(LT): support multi-fidelity
         budget = job.kwargs["budget"]
