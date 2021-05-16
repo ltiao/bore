@@ -6,14 +6,14 @@ from tensorflow.keras.losses import BinaryCrossentropy
 # from tensorflow.keras.callbacks import EarlyStopping
 from scipy.optimize import minimize
 
+from hpbandster.optimizers.hyperband import HyperBand
+from hpbandster.core.base_config_generator import base_config_generator
+
+from .types import DenseConfigurationSpace, DenseConfiguration
 from ..data import Record
 from ..engine import truncated_normal
 from ..models import DenseMaximizableSequential
 from ..optimizers import multi_start
-from ..types import DenseConfigurationSpace, DenseConfiguration
-
-from hpbandster.optimizers.hyperband import HyperBand
-from hpbandster.core.base_config_generator import base_config_generator
 
 
 TRANSFORMS = dict(identity=tf.identity, sigmoid=tf.sigmoid, exp=tf.exp)
@@ -50,24 +50,24 @@ class BORE(HyperBand):
         if gamma is None:
             gamma = 1/eta
 
-        cg = ClassifierGenerator(config_space=config_space, gamma=gamma,
-                                 num_random_init=num_random_init,
-                                 random_rate=random_rate, retrain=retrain,
-                                 classifier_kws=dict(num_layers=num_layers,
-                                                     num_units=num_units,
-                                                     activation=activation,
-                                                     optimizer=optimizer),
-                                 fit_kws=dict(batch_size=batch_size,
-                                              num_steps_per_iter=num_steps_per_iter,
-                                              num_epochs=num_epochs),
-                                 optimizer_kws=dict(transform=transform,
-                                                    method=method,
-                                                    max_iter=max_iter,
-                                                    ftol=ftol,
-                                                    distortion=distortion,
-                                                    num_starts=num_starts,
-                                                    num_samples=num_samples),
-                                 seed=seed)
+        cg = ClassifierConfigGenerator(config_space=config_space, gamma=gamma,
+                                       num_random_init=num_random_init,
+                                       random_rate=random_rate, retrain=retrain,
+                                       classifier_kws=dict(num_layers=num_layers,
+                                                           num_units=num_units,
+                                                           activation=activation,
+                                                           optimizer=optimizer),
+                                       fit_kws=dict(batch_size=batch_size,
+                                                    num_steps_per_iter=num_steps_per_iter,
+                                                    num_epochs=num_epochs),
+                                       optimizer_kws=dict(transform=transform,
+                                                          method=method,
+                                                          max_iter=max_iter,
+                                                          ftol=ftol,
+                                                          distortion=distortion,
+                                                          num_starts=num_starts,
+                                                          num_samples=num_samples),
+                                       seed=seed)
         # (LT): Note this is using the *grandparent* class initializer to
         # replace the config_generator!
         super(HyperBand, self).__init__(config_generator=cg, **kwargs)
@@ -98,14 +98,14 @@ class BORE(HyperBand):
         self.config.update(conf)
 
 
-class ClassifierGenerator(base_config_generator):
+class ClassifierConfigGenerator(base_config_generator):
     """
     class to implement random sampling from a ConfigSpace
     """
     def __init__(self, config_space, gamma, num_random_init, random_rate,
                  retrain, classifier_kws, fit_kws, optimizer_kws, seed, **kwargs):
 
-        super(ClassifierGenerator, self).__init__(**kwargs)
+        super(ClassifierConfigGenerator, self).__init__(**kwargs)
 
         assert 0. < gamma < 1., "`gamma` must be in (0, 1)"
         assert num_random_init > 0
