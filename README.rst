@@ -18,16 +18,91 @@ BORE: Bayesian Optimization as Density-Ratio Estimation
      :target: https://pyup.io/repos/github/ltiao/bore/
      :alt: Updates
 
-* Free software: MIT license
-* Documentation: https://bore.readthedocs.io.
-
 A minimalistic implementation of BORE: Bayesian Optimization as Density-Ratio Estimation [1]_
 in Python 3 and TensorFlow 2.
+
+Getting Started
+---------------
+
+Install my-project with npm
+
+.. code-block:: bash
+
+  $ pip install bore[tf]
+
+With GPU acceleration:
+
+.. code-block:: bash
+
+  $ pip install bore[tf-gpu]
+
+With support for HpBandSter plugin 
+
+.. code-block:: bash
+
+  $ pip install bore[tf,hpbandster]
+
+Usage/Examples
+--------------
+
+.. code-block:: python
+
+  from bore.models import MaximizableSequential
+  from tensorflow.keras.layers import Dense
+
+  # build model
+  classifier = MaximizableSequential()
+  classifier.add(Dense(16, activation="relu"))
+  classifier.add(Dense(16, activation="relu"))
+  classifier.add(Dense(1, activation="sigmoid"))
+
+  # compile model
+  classifier.compile(optimizer="adam", loss="binary_crossentropy")
+
+The optimization loop can be implemented as follows:
+
+.. code-block:: python
+
+  import numpy as np
+
+  features = []
+  targets = []
+
+  # initial design
+  features.extend(features_init)
+  targets.extend(targets_init)
+
+  for i in range(num_iterations):
+
+      # construct classification problem
+      X = np.vstack(features)
+      y = np.hstack(targets)
+
+      tau = np.quantile(y, q=0.25)
+      z = np.less(y, tau)
+
+      # update classifier
+      classifier.fit(X, z, epochs=200, batch_size=64)
+
+      # suggest new candidate
+      x_next = classifier.argmax(method="L-BFGS-B", num_start_points=3, bounds=bounds)
+
+      # evaluate blackbox function
+      y_next = blackbox.evaluate(x_next)
+
+      # update dataset
+      features.append(x_next)
+      targets.append(y_next)
 
 Features
 --------
 
-* TODO
+* BORE-MLP: BORE based on a multi-layer perceptron (MLP) (i.e. a fully-connected neural network) classifier
+
+Roadmap
+-------
+
+* Integration with the `Optuna <https://optuna.org/>`_ framework by `Sampler <https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.BaseSampler.html#optuna.samplers.BaseSampler>`_ plugin implementation.
 
 Authors
 -------
@@ -69,3 +144,28 @@ Cite:
     year={2021},
     month={July}
   }
+
+License
+-------
+
+MIT License
+
+Copyright (c) 2021, Louis C. Tiao
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
