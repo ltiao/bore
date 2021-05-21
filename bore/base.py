@@ -4,12 +4,6 @@ from scipy.stats import truncnorm
 from .decorators import unbatch, value_and_gradient, numpy_io, squeeze
 
 
-def truncated_normal(loc, scale, lower, upper):
-    a = (lower - loc) / scale
-    b = (upper - loc) / scale
-    return truncnorm(a=a, b=b, loc=loc, scale=scale)
-
-
 def convert(model, transform=tf.identity):
     """
     Builds a callable from a Keras model that takes a single array as input
@@ -44,3 +38,25 @@ def convert(model, transform=tf.identity):
         return transform(model(x))
 
     return fn
+
+
+def truncated_normal(loc, scale, lower, upper):
+    a = (lower - loc) / scale
+    b = (upper - loc) / scale
+    return truncnorm(a=a, b=b, loc=loc, scale=scale)
+
+
+def maybe_distort(loc, distortion=None, bounds=None, random_state=None,
+                  print_fn=print):
+
+    if distortion is None:
+        return loc
+
+    assert bounds is not None, "must specify bounds!"
+    ret = truncated_normal(loc=loc,
+                           scale=distortion,
+                           lower=bounds.lb,
+                           upper=bounds.ub).rvs(random_state=random_state)
+    print_fn(f"Suggesting x={ret} (after applying distortion={distortion:.3E})")
+
+    return ret

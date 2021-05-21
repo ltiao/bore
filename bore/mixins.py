@@ -3,7 +3,7 @@ import tensorflow as tf
 from scipy.optimize import minimize
 
 from .optimizers import multi_start
-from .engine import convert
+from .base import convert
 
 multi_start_minimize = multi_start(minimizer_fn=minimize)
 

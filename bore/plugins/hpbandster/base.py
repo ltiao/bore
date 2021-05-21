@@ -11,7 +11,7 @@ from hpbandster.core.base_config_generator import base_config_generator
 
 from .types import DenseConfigurationSpace, DenseConfiguration
 from ...data import Record
-from ...engine import truncated_normal
+from ...base import maybe_distort
 from ...models import DenseMaximizableSequential
 from ...optimizers import multi_start
 
@@ -19,22 +19,6 @@ from ...optimizers import multi_start
 TRANSFORMS = dict(identity=tf.identity, sigmoid=tf.sigmoid, exp=tf.exp)
 
 minimize_multi_start = multi_start(minimizer_fn=minimize)
-
-
-def maybe_distort(loc, distortion=None, bounds=None, random_state=None,
-                  print_fn=print):
-
-    if distortion is None:
-        return loc
-
-    assert bounds is not None, "must specify bounds!"
-    ret = truncated_normal(loc=loc,
-                           scale=distortion,
-                           lower=bounds.lb,
-                           upper=bounds.ub).rvs(random_state=random_state)
-    print_fn(f"Suggesting x={ret} (after applying distortion={distortion:.3E})")
-
-    return ret
 
 
 class BORE(HyperBand):
