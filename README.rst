@@ -63,7 +63,7 @@ First we build and compile the classifier model using ``MaximizableSequential``:
   # compile model
   classifier.compile(optimizer="adam", loss="binary_crossentropy")
 
-This syntax should be familiar to anyone who has used a high-level neural network library such as Keras. In fact, ``MaximizableSequential`` is simply a subclass of the ``Sequential`` class from Keras. More specifically, in addition to inheriting the usual functionalities, it provides a method ``argmax`` that finds the input at which the output of the model is maximized. 
+This syntax should be familiar to anyone who has used a high-level neural network library such as Keras. In fact, ``MaximizableSequential`` is simply a subclass of the ``Sequential`` class from Keras. More specifically, in addition to inheriting the usual functionalities, it provides the ``argmax`` method which finds the input where the output of the model is maximized. 
 
 Using this method, the standard optimization loop can be implemented as follows:
 
