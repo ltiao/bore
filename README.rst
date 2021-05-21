@@ -103,12 +103,12 @@ Using this method, the standard optimization loop can be implemented as follows:
 Features
 --------
 
-* BORE-MLP: BORE based on a multi-layer perceptron (MLP) (i.e. a fully-connected neural network) classifier
+* BORE-MLP: BORE based on a multi-layer perceptron (MLP) classifier
 
 Roadmap
 -------
 
-* Integration with the `Optuna <https://optuna.org/>`_ framework by `Sampler <https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.BaseSampler.html#optuna.samplers.BaseSampler>`_ plugin implementation.
+* Integration with the `Optuna <https://optuna.org/>`_ framework by implementing a `Sampler <https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.BaseSampler.html#optuna.samplers.BaseSampler>`_ plugin.
 
 Authors
 -------
