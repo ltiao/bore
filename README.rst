@@ -28,19 +28,19 @@ Install with ``pip``:
 
 .. code-block:: bash
 
-  $ pip install bore[tf]
+  $ pip install "bore[tf]"
 
 With support for GPU accelaration:
 
 .. code-block:: bash
 
-  $ pip install bore[tf-gpu]
+  $ pip install "bore[tf-gpu]"
 
 With support for HpBandSter plugin: 
 
 .. code-block:: bash
 
-  $ pip install bore[tf,hpbandster]
+  $ pip install "bore[tf,hpbandster]"
 
 Usage/Examples
 --------------
