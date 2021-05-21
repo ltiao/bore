@@ -45,6 +45,10 @@ With support for HpBandSter plugin:
 Usage/Examples
 --------------
 
+This example implements an instantiation of BORE based on a multi-layer perceptron (i.e. a fully-connected feed-forward neural network) classifier. 
+
+First we build and compile the classifier model using ``MaximizableSequential``:
+
 .. code-block:: python
 
   from bore.models import MaximizableSequential
@@ -59,7 +63,9 @@ Usage/Examples
   # compile model
   classifier.compile(optimizer="adam", loss="binary_crossentropy")
 
-The optimization loop can be implemented as follows:
+This syntax should be familiar to anyone who has used a high-level neural network library such as Keras. In fact, ``MaximizableSequential`` is simply a subclass of the ``Sequential`` class from Keras. More specifically, in addition to inheriting the usual functionalities, it provides a method ``argmax`` that finds the input at which the output of the model is maximized. 
+
+Using this method, the standard optimization loop can be implemented as follows:
 
 .. code-block:: python
 
