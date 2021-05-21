@@ -4,6 +4,16 @@ import ConfigSpace as CS
 from scipy.optimize import Bounds
 
 
+def array_from_dict(config_space, dct):
+    config = DenseConfiguration(config_space, values=dct)
+    return config.to_array()
+
+
+def dict_from_array(config_space, array):
+    config = DenseConfiguration.from_array(config_space, array_dense=array)
+    return config.get_dictionary()
+
+
 class DenseConfigurationSpace(CS.ConfigurationSpace):
 
     def __init__(self, other, *args, **kwargs):
@@ -78,13 +88,12 @@ class DenseConfiguration(CS.Configuration):
                                                  *args, **kwargs)
 
     @classmethod
-    def from_array(cls, configuration_space, array_dense):
+    def from_array(cls, configuration_space, array_dense, dtype="float64"):
 
         assert isinstance(configuration_space, DenseConfigurationSpace)
         cs = configuration_space
         # initialize output array
-        # TODO(LT): specify `dtype` flexibly
-        array_sparse = np.empty(cs.size_sparse, dtype="float64")
+        array_sparse = np.empty(cs.size_sparse, dtype=dtype)
 
         # process numerical hyperparameters
         if cs.nums:
@@ -97,14 +106,14 @@ class DenseConfiguration(CS.Configuration):
 
         return cls(configuration_space=configuration_space, vector=array_sparse)
 
-    def to_array(self):
+    def to_array(self, dtype="float64"):
 
         cs = self.configuration_space
         array_sparse = super(DenseConfiguration, self).get_array()
 
         # initialize output array
         # TODO(LT): specify `dtype` flexibly
-        array_dense = np.zeros(cs.size_dense, dtype="float64")
+        array_dense = np.zeros(cs.size_dense, dtype=dtype)
 
         # process numerical hyperparameters
         if cs.nums:

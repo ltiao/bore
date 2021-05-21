@@ -14,13 +14,11 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 from mpl_toolkits.mplot3d import Axes3D
 
-from scipy.optimize import minimize, Bounds
+from scipy.optimize import Bounds
 
-from bore.optimizers import multi_start
+from bore.optimizers import minimize_multi_start
 from bore.decorators import value_and_gradient, numpy_io, unstack
 # %%
-
-minimize_multi_start = multi_start(minimizer_fn=minimize)
 
 # constants
 # num_index_points = 128
@@ -30,7 +28,8 @@ x_min, x_max = -5, 10
 y, x = np.ogrid[y_min:y_max:200j, x_min:x_max:200j]
 X, Y = np.broadcast_arrays(x, y)
 
-num_restarts = 20
+num_starts = 20
+num_samples = 1024
 
 seed = 8888  # set random seed for reproducibility
 random_state = np.random.RandomState(seed)
@@ -79,10 +78,15 @@ def func(x1, x2):
 
     return branin(x1, x2)
 # %%
-
+print(func(np.zeros(shape=(50, 2))))
+# %%
+print(func(np.zeros(2)))
+# %%
 
 bounds = Bounds(lb=[x_min, y_min], ub=[x_max, y_max])
-results = minimize_multi_start(func, bounds, num_restarts=num_restarts,
+results = minimize_multi_start(func, bounds,
+                               num_starts=num_starts,
+                               num_samples=num_samples,
                                method="L-BFGS-B", jac=True,
                                options=dict(maxiter=100, ftol=1e-2),
                                random_state=random_state)
@@ -96,9 +100,9 @@ v = np.hstack([res.fun for res in results])
 
 fig, ax = plt.subplots()
 
-ax.scatter(*U.T, c=v, cmap="Spectral_r")
+ax.scatter(*U.T, c=v, alpha=0.6, cmap="crest")
 ax.contour(X, Y, branin(x, y), levels=np.logspace(0, 5, 35), norm=LogNorm(),
-           cmap="Spectral_r")
+           cmap="crest")
 
 ax.set_xlabel(r"$x_1$")
 ax.set_ylabel(r"$x_2$")
@@ -132,7 +136,9 @@ high = [0.15, 50000, 115600, 1110, 116, 820, 1680, 12045]
 # %%
 
 bounds = Bounds(lb=low, ub=high)
-results = minimize_multi_start(borehole, bounds, num_restarts=num_restarts,
+results = minimize_multi_start(borehole, bounds,
+                               num_starts=num_starts,
+                               num_samples=num_samples,
                                method="L-BFGS-B", jac=True,
                                random_state=random_state)
 # %%

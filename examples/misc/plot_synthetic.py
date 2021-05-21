@@ -15,7 +15,7 @@ import seaborn as sns
 from matplotlib.colors import LogNorm
 from mpl_toolkits.mplot3d import Axes3D
 
-from bore.benchmarks import GoldsteinPrice, Ackley
+from bore_experiments.benchmarks import GoldsteinPrice, Ackley
 # %%
 
 num_runs = 50
@@ -24,7 +24,7 @@ num_iterations = 1000
 seed = 8888  # set random seed for reproducibility
 random_state = np.random.RandomState(seed)
 
-benchmark = Ackley(dimensions=2)
+benchmark = GoldsteinPrice()
 
 cs = benchmark.get_config_space()
 hx = cs.get_hyperparameter("x0")

@@ -1,11 +1,7 @@
 import tensorflow as tf
 
-from scipy.optimize import minimize
-
-from .optimizers import multi_start
+from .optimizers import minimize_multi_start
 from .base import convert
-
-multi_start_minimize = multi_start(minimizer_fn=minimize)
 
 
 class MaximizableMixin:
@@ -16,7 +12,7 @@ class MaximizableMixin:
 
     def maxima(self, bounds, num_starts=3, num_samples=512, method="L-BFGS-B",
                options=dict(maxiter=200, ftol=1e-9), random_state=None):
-        return multi_start_minimize(self._func, bounds=bounds,
+        return minimize_multi_start(self._func, bounds=bounds,
                                     num_starts=num_starts,
                                     num_samples=num_samples,
                                     random_state=random_state,

@@ -16,7 +16,7 @@ def unstack(fn):
 
     @wraps(fn)
     def new_fn(args):
-        return fn(*tf.unstack(args))
+        return fn(*tf.unstack(args, axis=-1))
 
     return new_fn
 

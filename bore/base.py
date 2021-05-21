@@ -6,22 +6,24 @@ from .decorators import unbatch, value_and_gradient, numpy_io, squeeze
 
 def convert(model, transform=tf.identity):
     """
-    Builds a callable from a Keras model that takes a single array as input
-    (rather than a batch of Tensors), and returns the output value as a scalar
-    the and gradient vector as an array.
+    Given a Keras model, builds a callable that takes a single array as input
+    (rather than a batch of Tensors) and returns a pair containing the output
+    value (a scalar) and the gradient vector (an array).
 
-    This function makes it easy to use methods from ``scipy.optimize`` to
-    minimize inputs to a model wrt to its output with option ``jac=True``.
+    This function makes it easy to use optimization methods
+    from ``scipy.optimize`` to minimize inputs to a model wrt to its output
+    using the option ``jac=True``.
 
     Parameters
     ----------
     model : a Keras model
         A Keras model, or any batched TensorFlow operation, with output
-        dimension 1. More specifically, any operation that takes a Tensor of
-        shape ``(None, D)`` as input and outputs Tensor of shape ``(None, 1)``.
+        dimension 1. More precisely, any operation that takes a Tensor of
+        shape ``(None, D)`` as input and returns as output a Tensor of
+        shape ``(None, 1)``.
     transform : callable, optional
-        A function that transforms the output of the model, e.g. negates the
-        output for subsequent maximization instead of minimization.
+        A function that transforms the output of the model, e.g. negating the
+        output effectively maximizes instead of minimizes it.
 
     Returns
     -------

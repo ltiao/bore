@@ -3,22 +3,17 @@ import tensorflow as tf
 import tensorflow.keras.backend as K
 
 from tensorflow.keras.losses import BinaryCrossentropy
-# from tensorflow.keras.callbacks import EarlyStopping
-from scipy.optimize import minimize
 
 from hpbandster.optimizers.hyperband import HyperBand
 from hpbandster.core.base_config_generator import base_config_generator
 
-from .types import DenseConfigurationSpace, DenseConfiguration
+from .types import DenseConfigurationSpace, array_from_dict, dict_from_array
 from ...data import Record
 from ...base import maybe_distort
 from ...models import DenseMaximizableSequential
-from ...optimizers import multi_start
 
 
 TRANSFORMS = dict(identity=tf.identity, sigmoid=tf.sigmoid, exp=tf.exp)
-
-minimize_multi_start = multi_start(minimizer_fn=minimize)
 
 
 class BORE(HyperBand):
@@ -83,16 +78,15 @@ class BORE(HyperBand):
 
 
 class ClassifierConfigGenerator(base_config_generator):
-    """
-    class to implement random sampling from a ConfigSpace
-    """
+
     def __init__(self, config_space, gamma, num_random_init, random_rate,
                  retrain, classifier_kws, fit_kws, optimizer_kws, seed, **kwargs):
 
         super(ClassifierConfigGenerator, self).__init__(**kwargs)
 
         assert 0. < gamma < 1., "`gamma` must be in (0, 1)"
-        assert num_random_init > 0
+        assert num_random_init > 0, "number of initial random designs " \
+            "must be non-zero!"
         assert random_rate is None or 0. <= random_rate < 1., \
             "`random_rate` must be in [0, 1)"
 
@@ -103,9 +97,9 @@ class ClassifierConfigGenerator(base_config_generator):
         # Build ConfigSpace with one-hot-encoded categorical inputs and
         # initialize bounds
         self.config_space = DenseConfigurationSpace(config_space, seed=seed)
-        self.bounds = self.config_space.get_bounds()
 
         self.input_dim = self.config_space.get_dimensions(sparse=False)
+        self.bounds = self.config_space.get_bounds()
 
         self.num_layers = classifier_kws.get("num_layers", 2)
         self.num_units = classifier_kws.get("num_units", 32)
@@ -121,6 +115,7 @@ class ClassifierConfigGenerator(base_config_generator):
         self.num_epochs = fit_kws.get("num_epochs")
 
         # Options for maximizing the acquisition function
+
         transform_name = optimizer_kws.get("transform", "sigmoid")
         assert transform_name in TRANSFORMS, \
             f"`transform` must be one of {tuple(TRANSFORMS.keys())}"
@@ -138,15 +133,6 @@ class ClassifierConfigGenerator(base_config_generator):
 
         self.seed = seed
         self.random_state = np.random.RandomState(seed)
-
-    def _array_from_dict(self, dct):
-        config = DenseConfiguration(self.config_space, values=dct)
-        return config.to_array()
-
-    def _dict_from_array(self, array):
-        config = DenseConfiguration.from_array(self.config_space,
-                                               array_dense=array)
-        return config.get_dictionary()
 
     def _get_steps_per_epoch(self, dataset_size):
         steps_per_epoch = int(np.ceil(np.true_divide(dataset_size,
@@ -277,7 +263,7 @@ class ClassifierConfigGenerator(base_config_generator):
         config_opt_arr = maybe_distort(loc, self.distortion,
                                        self.bounds, self.random_state,
                                        print_fn=self.logger.info)
-        config_opt_dict = self._dict_from_array(config_opt_arr)
+        config_opt_dict = dict_from_array(self.config_space, config_opt_arr)
 
         # Delete classifier (if retraining from scratch every iteration)
         self._maybe_delete_classifier()
@@ -292,7 +278,7 @@ class ClassifierConfigGenerator(base_config_generator):
         budget = job.kwargs["budget"]
 
         config_dict = job.kwargs["config"]
-        config_arr = self._array_from_dict(config_dict)
+        config_arr = array_from_dict(self.config_space, config_dict)
 
         loss = job.result["loss"]
 
