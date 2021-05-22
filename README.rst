@@ -105,7 +105,7 @@ Features
 
 * BORE-MLP: BORE based on a multi-layer perceptron (MLP) classifier
 
-  * Provides higher-order functions that leverages automatic differentiation to transform Keras models into functions that can easily be optimized using multi-started quasi-Newton hill-climbing methods such as L-BFGS in SciPy.  
+  * Provides higher-order functions that leverage automatic differentiation to transform Keras models into functions that can easily be optimized by methods in SciPy, not least multi-started quasi-Newton hill-climbing methods such as L-BFGS.  
 
 Roadmap
 -------
