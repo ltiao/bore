@@ -6,9 +6,9 @@ from .base import convert
 
 class MaximizableMixin:
 
-    def __init__(self, transform=tf.identity, *args, **kwargs):
+    def __init__(self, transform=tf.math.negative, *args, **kwargs):
         super(MaximizableMixin, self).__init__(*args, **kwargs)
-        self._func = convert(self, transform=lambda u: - transform(u))
+        self._func = convert(self, transform=transform)
 
     def maxima(self, bounds, num_starts=3, num_samples=512, method="L-BFGS-B",
                options=dict(maxiter=200, ftol=1e-9), random_state=None):

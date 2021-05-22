@@ -119,7 +119,8 @@ class ClassifierConfigGenerator(base_config_generator):
         transform_name = optimizer_kws.get("transform", "sigmoid")
         assert transform_name in TRANSFORMS, \
             f"`transform` must be one of {tuple(TRANSFORMS.keys())}"
-        self.transform = TRANSFORMS.get(transform_name)
+        h = TRANSFORMS.get(transform_name)
+        self.transform = lambda u: h(-u)
 
         assert optimizer_kws.get("num_starts") > 0
         self.num_starts = optimizer_kws.get("num_starts", 5)
