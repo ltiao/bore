@@ -19,12 +19,12 @@ TRANSFORMS = dict(identity=tf.identity, sigmoid=tf.sigmoid, exp=tf.exp)
 class BORE(HyperBand):
 
     def __init__(self, config_space, eta=3, min_budget=0.01, max_budget=1,
-                 gamma=None, num_random_init=10, random_rate=None, retrain=False,
-                 num_starts=5, num_samples=512, batch_size=64,
+                 gamma=None, num_random_init=10, random_rate=0.1, retrain=False,
+                 num_starts=5, num_samples=1024, batch_size=64,
                  num_steps_per_iter=1000, num_epochs=None, optimizer="adam",
-                 num_layers=2, num_units=32, activation="relu",
-                 transform="sigmoid", method="L-BFGS-B", max_iter=100,
-                 ftol=1e-2, distortion=None, restart=False, seed=None, **kwargs):
+                 num_layers=2, num_units=32, activation="elu",
+                 transform="sigmoid", method="L-BFGS-B", max_iter=1000,
+                 ftol=1e-9, distortion=None, restart=False, seed=None, **kwargs):
 
         if gamma is None:
             gamma = 1/eta
@@ -103,7 +103,7 @@ class ClassifierConfigGenerator(base_config_generator):
 
         self.num_layers = classifier_kws.get("num_layers", 2)
         self.num_units = classifier_kws.get("num_units", 32)
-        self.activation = classifier_kws.get("activation", "relu")
+        self.activation = classifier_kws.get("activation", "elu")
         self.optimizer = classifier_kws.get("optimizer", "adam")
 
         self.retrain = retrain
@@ -123,10 +123,10 @@ class ClassifierConfigGenerator(base_config_generator):
 
         assert optimizer_kws.get("num_starts") > 0
         self.num_starts = optimizer_kws.get("num_starts", 5)
-        self.num_samples = optimizer_kws.get("num_samples", 512)
+        self.num_samples = optimizer_kws.get("num_samples", 1024)
         self.method = optimizer_kws.get("method", "L-BFGS-B")
-        self.ftol = optimizer_kws.get("ftol", 1e-2)
-        self.max_iter = optimizer_kws.get("max_iter", 100)
+        self.ftol = optimizer_kws.get("ftol", 1e-9)
+        self.max_iter = optimizer_kws.get("max_iter", 1000)
         self.distortion = optimizer_kws.get("distortion")
 
         self.record = Record()
