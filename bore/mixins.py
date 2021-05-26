@@ -10,8 +10,8 @@ class MaximizableMixin:
         super(MaximizableMixin, self).__init__(*args, **kwargs)
         self._func = convert(self, transform=lambda u: transform(-u))
 
-    def maxima(self, bounds, num_starts=3, num_samples=512, method="L-BFGS-B",
-               options=dict(maxiter=200, ftol=1e-9), random_state=None):
+    def maxima(self, bounds, num_starts=5, num_samples=1024, method="L-BFGS-B",
+               options=dict(maxiter=1000, ftol=1e-9), random_state=None):
         return minimize_multi_start(self._func, bounds=bounds,
                                     num_starts=num_starts,
                                     num_samples=num_samples,
