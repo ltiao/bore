@@ -1,7 +1,7 @@
 import numpy as np
 
 from .kernels import RadialBasis
-from ..base import _from_bounds
+from ..utils import from_bounds
 
 from sklearn.utils import check_random_state
 
@@ -49,7 +49,7 @@ class SVGD:
         Optimize from specified number of uniformly sampled starting points.
         """
         random_state = check_random_state(random_state)
-        (low, high), dims = _from_bounds(bounds)
+        (low, high), dims = from_bounds(bounds)
         # TODO(LT): Allow alternative arbitary generator function callbacks
         # to support e.g. Gaussian sampling, low-discrepancy sequences, etc.
         x_init = random_state.uniform(low=low, high=high, size=(batch_size, dims))

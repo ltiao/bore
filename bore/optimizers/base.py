@@ -1,20 +1,7 @@
-from scipy.optimize import minimize, Bounds
+from scipy.optimize import minimize
 from sklearn.utils import check_random_state
 
-
-def _from_bounds(bounds):
-
-    if isinstance(bounds, Bounds):
-        low = bounds.lb
-        high = bounds.ub
-        dims = len(low)
-        assert dims == len(high), "lower and upper bounds sizes do not match"
-    else:
-        # assumes `bounds` is a list of tuples
-        low, high = zip(*bounds)
-        dims = len(bounds)
-
-    return (low, high), dims
+from .utils import from_bounds
 
 
 def multi_start(minimizer_fn=minimize):
@@ -56,7 +43,7 @@ def multi_start(minimizer_fn=minimize):
             "number of random samples (`num_samples`) must be " \
             "greater than number of starting points (`num_starts`)"
 
-        (low, high), dims = _from_bounds(bounds)
+        (low, high), dims = from_bounds(bounds)
 
         # TODO(LT): Allow alternative arbitary generator function callbacks
         # to support e.g. Gaussian sampling, low-discrepancy sequences, etc.
