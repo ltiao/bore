@@ -19,7 +19,7 @@ requirements = [
 
 setup_requirements = ['pytest-runner', ]
 
-test_requirements = ['pytest>=3', ]
+test_requirements = ['pytest>=3', "scikit-learn"]
 
 setup(
     author="Louis C. Tiao",
