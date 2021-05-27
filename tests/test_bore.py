@@ -5,14 +5,17 @@
 import pytest
 import numpy as np
 
+from scipy.stats import multivariate_normal
 from scipy.spatial.distance import pdist, squareform
 from sklearn.metrics.pairwise import rbf_kernel
+
+from bore.optimizers.svgd.base import SVGD
 from bore.optimizers.svgd.kernels import RadialBasis
 
 
 # reference implementation from
 # https://github.com/dilinwang820/Stein-Variational-Gradient-Descent/
-class SVGD:
+class ReferenceSVGD:
     def __init__(self):
         pass
 
@@ -55,9 +58,8 @@ class SVGD:
         for iter_ in range(n_iter):
             lnpgrad = lnprob(theta)
             # calculating the kernel matrix
-            kxy, dxkxy = self.svgd_kernel(theta, h=-1)
+            kxy, dxkxy = self.svgd_kernel(theta, h=bandwidth)
             grad_theta = (np.matmul(kxy, lnpgrad) + dxkxy) / x0.shape[0]
-
             # adagrad
             if iter_ == 0:
                 historical_grad = historical_grad + grad_theta ** 2
@@ -88,11 +90,54 @@ def test_kernel(n_samples, n_features, length_scale, seed):
 
     # compare against scikit-learn implementation as a reference
     gamma = 0.5 / length_scale ** 2
-    assert np.allclose(K, rbf_kernel(X, gamma=gamma))
+    np.testing.assert_array_almost_equal(K, rbf_kernel(X, gamma=gamma), decimal=12)
 
     # compare against implementation from experimental repo associated with
     # original SVGD paper as a reference
-    svgd = SVGD()
+    svgd = ReferenceSVGD()
     Kxy, dxkxy = svgd.svgd_kernel(X, h=length_scale)
-    assert np.allclose(K, Kxy)
-    assert np.allclose(K_grad, dxkxy)
+    np.testing.assert_array_almost_equal(K, Kxy, decimal=10)
+    np.testing.assert_array_almost_equal(K_grad, dxkxy, decimal=10)
+
+
+@pytest.mark.parametrize("batch_size", [4, 16, 64])
+@pytest.mark.parametrize("length_scale", [1e-3, 0.5, 1.0, 2.0])
+@pytest.mark.parametrize("seed", [42, 8888])
+def test_svgd(batch_size, length_scale, seed):
+
+    n_features = 2
+
+    n_iter = 60
+    step_size = 1e-2
+    alpha = .9
+    eps = 1e-6
+
+    bounds = [(-3., 3.), (-2., 4.)]
+
+    random_state = np.random.RandomState(seed)
+    x_init = random_state.randn(batch_size, n_features)
+
+    mu = np.array([-0.6871, 0.8010])
+    precision = np.array([[0.2260, 0.1652],
+                          [0.1652, 0.6779]])
+    # mvn = multivariate_normal(mean=mu, cov=np.linalg.inv(precision))
+
+    def log_prob_grad(x):
+        return (mu - x) @ precision
+
+    kernel = RadialBasis(length_scale=length_scale)
+    svgd1 = SVGD(kernel=kernel, n_iter=n_iter, step_size=step_size,
+                 alpha=alpha, eps=eps)
+
+    x = svgd1.optimize(log_prob_grad, batch_size, bounds)
+    assert x.shape == (batch_size, n_features)
+
+    x1 = svgd1.optimize_from_init(log_prob_grad, x_init, bounds)
+
+    assert x1.shape == x_init.shape
+
+    svgd2 = ReferenceSVGD()
+    x2 = svgd2.update(x_init, log_prob_grad, n_iter=n_iter, stepsize=step_size,
+                      bandwidth=length_scale)
+
+    np.testing.assert_array_almost_equal(x1, x2)

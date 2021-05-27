@@ -1,3 +1,3 @@
-from .base import svgd
+from .base import SVGD
 
-__all__ = ["svgd"]
+__all__ = ["SVGD"]
