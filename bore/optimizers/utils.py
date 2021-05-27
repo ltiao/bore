@@ -7,7 +7,7 @@ def from_bounds(bounds):
         low = bounds.lb
         high = bounds.ub
         dims = len(low)
-        assert dims == len(high), "lower and upper bounds sizes do not match"
+        assert dims == len(high), "lower and upper bounds sizes do not match!"
     else:
         # assumes `bounds` is a list of tuples
         low, high = zip(*bounds)
