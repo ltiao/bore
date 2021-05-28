@@ -5,6 +5,7 @@
 import pytest
 import numpy as np
 
+from functools import partial
 from scipy.stats import multivariate_normal
 from scipy.spatial.distance import pdist, squareform
 from sklearn.metrics.pairwise import rbf_kernel
@@ -107,7 +108,7 @@ def test_svgd(batch_size, length_scale, seed):
 
     n_features = 2
 
-    n_iter = 60
+    n_iter = 1000
     step_size = 1e-2
     alpha = .9
     eps = 1e-6
@@ -126,18 +127,34 @@ def test_svgd(batch_size, length_scale, seed):
         return (mu - x) @ precision
 
     kernel = RadialBasis(length_scale=length_scale)
-    svgd1 = SVGD(kernel=kernel, n_iter=n_iter, step_size=step_size,
-                 alpha=alpha, eps=eps)
+    svgd = SVGD(kernel=kernel, n_iter=n_iter, step_size=step_size,
+                alpha=alpha, eps=eps)
 
-    x = svgd1.optimize(log_prob_grad, batch_size, bounds)
+    x = svgd.optimize(log_prob_grad, batch_size, bounds)
     assert x.shape == (batch_size, n_features)
 
-    x1 = svgd1.optimize_from_init(log_prob_grad, x_init, bounds)
+    # Tiny numerical differences in the kernel implementation add up after many
+    # iterations. This test defines a dummy kernel that simply plugs in the
+    # reference implementation of the kernel to ensure that, all else being
+    # equal, our core SVGD algorithm implementation behaves identically to the
+    # reference implementation.
 
-    assert x1.shape == x_init.shape
-
-    svgd2 = ReferenceSVGD()
-    x2 = svgd2.update(x_init, log_prob_grad, n_iter=n_iter, stepsize=step_size,
+    svgd1 = ReferenceSVGD()
+    x1 = svgd1.update(x_init, log_prob_grad, n_iter=n_iter, stepsize=step_size,
                       bandwidth=length_scale)
 
-    np.testing.assert_array_almost_equal(x1, x2)
+    class DummyKernel:
+
+        def __init__(self, length_scale=1.0):
+            self.length_scale = length_scale
+
+        def value_and_grad(self, X):
+            return svgd1.svgd_kernel(X, h=self.length_scale)
+
+    kernel = DummyKernel(length_scale=length_scale)
+    svgd2 = SVGD(kernel=kernel, n_iter=n_iter, step_size=step_size,
+                 alpha=alpha, eps=eps)
+    x2 = svgd2.optimize_from_init(log_prob_grad, x_init, bounds)
+    assert x2.shape == x_init.shape
+
+    np.testing.assert_array_equal(x1, x2)
