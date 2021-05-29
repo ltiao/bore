@@ -1,6 +1,8 @@
 import tensorflow as tf
 
 from .optimizers import minimize_multi_start
+from .optimizers.svgd import SVGD
+from .optimizers.svgd.kernels import RadialBasis
 from .base import convert
 
 
@@ -41,3 +43,16 @@ class MaximizableMixin:
                     res_best = res
 
         return res_best
+
+    def argmax_batch(self, batch_size, bounds, length_scale=None, n_iter=1000,
+                     step_size=1e-3, alpha=.9, eps=1e-6):
+
+        def log_prob_grad(x):
+            val, grad = self._func(x)
+            return grad
+
+        kernel = RadialBasis(length_scale=length_scale)
+        svgd = SVGD(kernel=kernel, n_iter=n_iter, step_size=step_size,
+                    alpha=alpha, eps=eps)
+
+        return svgd.optimize(log_prob_grad, batch_size, bounds)

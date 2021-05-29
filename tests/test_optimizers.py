@@ -5,8 +5,6 @@
 import pytest
 import numpy as np
 
-from functools import partial
-from scipy.stats import multivariate_normal
 from scipy.spatial.distance import pdist, squareform
 from sklearn.metrics.pairwise import rbf_kernel
 
@@ -20,10 +18,10 @@ class ReferenceSVGD:
     def __init__(self):
         pass
 
-    def svgd_kernel(self, theta, h=-1):
+    def svgd_kernel(self, theta, h=None):
         sq_dist = pdist(theta)
         pairwise_dists = squareform(sq_dist) ** 2
-        if h < 0:  # if h < 0, using median trick
+        if h is None:  # if h is None, using median trick
             h = np.median(pairwise_dists)
             h = np.sqrt(0.5 * h / np.log(theta.shape[0] + 1))
 
@@ -43,7 +41,7 @@ class ReferenceSVGD:
         lnprob,
         n_iter=1000,
         stepsize=1e-3,
-        bandwidth=-1,
+        bandwidth=None,
         alpha=0.9,
         debug=False,
     ):
@@ -90,7 +88,7 @@ def test_kernel(n_samples, n_features, length_scale, seed):
     assert K_grad.shape == (n_samples, n_features)
 
     # compare against scikit-learn implementation as a reference
-    gamma = 0.5 / length_scale ** 2
+    gamma = .5/length_scale**2
     np.testing.assert_array_almost_equal(K, rbf_kernel(X, gamma=gamma), decimal=12)
 
     # compare against implementation from experimental repo associated with
@@ -101,14 +99,38 @@ def test_kernel(n_samples, n_features, length_scale, seed):
     np.testing.assert_array_almost_equal(K_grad, dxkxy, decimal=10)
 
 
-@pytest.mark.parametrize("batch_size", [4, 16, 64])
-@pytest.mark.parametrize("length_scale", [1e-3, 0.5, 1.0, 2.0])
+@pytest.mark.parametrize("n_samples", [1, 4, 16])
+@pytest.mark.parametrize("n_features", [1, 2, 64])
 @pytest.mark.parametrize("seed", [42, 8888])
-def test_svgd(batch_size, length_scale, seed):
+def test_kernel_median_trick(n_samples, n_features, seed):
+
+    length_scale = None
+
+    random_state = np.random.RandomState(seed)
+    X = random_state.rand(n_samples, n_features)
+
+    kernel = RadialBasis(length_scale=length_scale)
+    K, K_grad = kernel.value_and_grad(X)
+
+    assert K.shape == (n_samples, n_samples)
+    assert K_grad.shape == (n_samples, n_features)
+
+    # compare against implementation from experimental repo associated with
+    # original SVGD paper as a reference
+    svgd = ReferenceSVGD()
+    Kxy, dxkxy = svgd.svgd_kernel(X, h=length_scale)
+    np.testing.assert_array_almost_equal(K, Kxy, decimal=10)
+    np.testing.assert_array_almost_equal(K_grad, dxkxy, decimal=10)
+
+
+@pytest.mark.parametrize("n_iter", [50, 500, 1000])
+@pytest.mark.parametrize("batch_size", [4, 16, 64])
+@pytest.mark.parametrize("length_scale", [None, 1e-3, 0.5, 1.0, 2.0])
+@pytest.mark.parametrize("seed", [42, 8888])
+def test_svgd(n_iter, batch_size, length_scale, seed):
 
     n_features = 2
 
-    n_iter = 1000
     step_size = 1e-2
     alpha = .9
     eps = 1e-6
@@ -130,7 +152,7 @@ def test_svgd(batch_size, length_scale, seed):
     svgd = SVGD(kernel=kernel, n_iter=n_iter, step_size=step_size,
                 alpha=alpha, eps=eps)
 
-    x = svgd.optimize(log_prob_grad, batch_size, bounds)
+    x = svgd.optimize(log_prob_grad, batch_size, bounds, random_state=random_state)
     assert x.shape == (batch_size, n_features)
 
     # Tiny numerical differences in the kernel implementation add up after many
