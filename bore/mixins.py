@@ -44,6 +44,9 @@ class MaximizableMixin:
 
         return res_best
 
+
+class BatchMaximizableMixin(MaximizableMixin):
+
     def argmax_batch(self, batch_size, bounds, length_scale=None, n_iter=1000,
                      step_size=1e-3, alpha=.9, eps=1e-6):
 

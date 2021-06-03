@@ -10,7 +10,7 @@ from hpbandster.core.base_config_generator import base_config_generator
 from .types import DenseConfigurationSpace, array_from_dict, dict_from_array
 from ...data import Record
 from ...base import maybe_distort
-from ...models import DenseMaximizableSequential
+from ...models import MaximizableDenseSequential
 
 
 TRANSFORMS = dict(identity=tf.identity, sigmoid=tf.sigmoid, exp=tf.exp)
@@ -142,7 +142,7 @@ class ClassifierConfigGenerator(base_config_generator):
     def _build_compile_network(self):
 
         self.logger.debug("Building and compiling network...")
-        network = DenseMaximizableSequential(transform=self.transform,
+        network = MaximizableDenseSequential(transform=self.transform,
                                              input_dim=self.input_dim,
                                              output_dim=1,
                                              num_layers=self.num_layers,
