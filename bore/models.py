@@ -31,5 +31,13 @@ class MaximizableDenseSequential(MaximizableMixin, DenseSequential):
     pass
 
 
+class BatchMaximizableModel(BatchMaximizableMixin, Model):
+    pass
+
+
+class BatchMaximizableSequential(BatchMaximizableMixin, Sequential):
+    pass
+
+
 class BatchMaximizableDenseSequential(BatchMaximizableMixin, DenseSequential):
     pass
