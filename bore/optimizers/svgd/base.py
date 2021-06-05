@@ -1,6 +1,7 @@
 import numpy as np
 
 from abc import ABC, abstractmethod
+from scipy.optimize import Bounds
 from sklearn.utils import check_random_state
 
 from .kernels import RadialBasis
@@ -71,11 +72,13 @@ class SVGD:
         self.alpha = alpha
         self.eps = eps
 
-    def optimize_from_init(self, log_prob_grad, x_init, bounds=None, callback=None):
+    def optimize_from_init(self, log_prob_grad, x_init, bounds=None,
+                           callback=None):
         """
         Optimize from specified starting points.
         """
-        # TODO(LT): Ensure that no particles exceed some user-defined bounds
+        assert bounds is None or isinstance(bounds, Bounds), \
+            "bounds must be instance of `scipy.optimize.Bounds`"
 
         n_init = x_init.shape[0]
         grad_hist = None
@@ -98,12 +101,16 @@ class SVGD:
             adj_grad = np.true_divide(grad, self.eps + np.sqrt(grad_hist))
             x += self.step_size * adj_grad
 
+            if bounds is not None:
+                x = x.clip(bounds.lb, bounds.ub)
+
             if callback is not None:
                 callback(x)
 
         return x
 
-    def optimize(self, log_prob_grad, batch_size, bounds=None, random_state=None):
+    def optimize(self, log_prob_grad, batch_size, bounds=None, callback=None,
+                 random_state=None):
         """
         Optimize from specified number of uniformly sampled starting points.
         """
@@ -112,4 +119,4 @@ class SVGD:
         # TODO(LT): Allow alternative arbitary generator function callbacks
         # to support e.g. Gaussian sampling, low-discrepancy sequences, etc.
         x_init = random_state.uniform(low=low, high=high, size=(batch_size, dims))
-        return self.optimize_from_init(log_prob_grad, x_init, bounds)
+        return self.optimize_from_init(log_prob_grad, x_init, bounds, callback)
