@@ -119,7 +119,7 @@ class SVGD:
 
         return x
 
-    def optimize(self, log_prob_grad, batch_size, bounds=None, callback=None,
+    def optimize(self, func, batch_size, bounds=None, callback=None,
                  random_state=None):
         """
         Optimize from specified number of uniformly sampled starting points.
@@ -129,4 +129,4 @@ class SVGD:
         # TODO(LT): Allow alternative arbitary generator function callbacks
         # to support e.g. Gaussian sampling, low-discrepancy sequences, etc.
         x_init = random_state.uniform(low=low, high=high, size=(batch_size, dims))
-        return self.optimize_from_init(log_prob_grad, x_init, bounds, callback)
+        return self.optimize_from_init(func, x_init, bounds, callback)
