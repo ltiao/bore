@@ -5,6 +5,7 @@
 import pytest
 import numpy as np
 
+from scipy.stats import multivariate_normal
 from scipy.spatial.distance import pdist, squareform
 from sklearn.metrics.pairwise import rbf_kernel
 
@@ -134,8 +135,7 @@ def test_svgd(n_iter, batch_size, length_scale, seed):
     step_size = 1e-2
     alpha = .9
     eps = 1e-6
-
-    bounds = [(-3., 3.), (-2., 4.)]
+    tau = 1.0
 
     random_state = np.random.RandomState(seed)
     x_init = random_state.randn(batch_size, n_features)
@@ -143,16 +143,23 @@ def test_svgd(n_iter, batch_size, length_scale, seed):
     mu = np.array([-0.6871, 0.8010])
     precision = np.array([[0.2260, 0.1652],
                           [0.1652, 0.6779]])
-    # mvn = multivariate_normal(mean=mu, cov=np.linalg.inv(precision))
+    mvn = multivariate_normal(mean=mu, cov=np.linalg.inv(precision))
+
+    def log_prob(x):
+        return mvn.logpdf(x)
 
     def log_prob_grad(x):
         return (mu - x) @ precision
 
+    def func(x):
+        return log_prob(x), log_prob_grad(x)
+
     kernel = RadialBasis(length_scale=length_scale)
     svgd = SVGD(kernel=kernel, n_iter=n_iter, step_size=step_size,
-                alpha=alpha, eps=eps)
+                alpha=alpha, eps=eps, tau=tau)
 
-    x = svgd.optimize(log_prob_grad, batch_size, bounds, random_state=random_state)
+    x = svgd.optimize(func, batch_size, bounds=[(-3., 3.), (-2., 4.)],
+                      random_state=random_state)
     assert x.shape == (batch_size, n_features)
 
     # Tiny numerical differences in the kernel implementation add up after many
@@ -175,8 +182,8 @@ def test_svgd(n_iter, batch_size, length_scale, seed):
 
     kernel = DummyKernel(length_scale=length_scale)
     svgd2 = SVGD(kernel=kernel, n_iter=n_iter, step_size=step_size,
-                 alpha=alpha, eps=eps)
-    x2 = svgd2.optimize_from_init(log_prob_grad, x_init, bounds)
+                 alpha=alpha, eps=eps, tau=tau)
+    x2 = svgd2.optimize_from_init(func, x_init, bounds=None)
     assert x2.shape == x_init.shape
 
     np.testing.assert_array_equal(x1, x2)

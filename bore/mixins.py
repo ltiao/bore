@@ -50,19 +50,20 @@ class MaximizableMixin:
 class BatchMaximizableMixin(MaximizableMixin):
 
     def __init__(self, transform=tf.identity, *args, **kwargs):
-        super(BatchMaximizableMixin, self).__init__(transform=transform, *args, **kwargs)
+        super(BatchMaximizableMixin, self).__init__(transform=transform,
+                                                    *args, **kwargs)
         # maximization problem for SVGD
-        self._func_max = convert(self, transform=lambda u: transform(u))
+        self._func_max = convert(self, transform=transform)
 
     def argmax_batch(self, batch_size, bounds, length_scale=None, n_iter=1000,
                      step_size=1e-3, alpha=.9, eps=1e-6):
 
-        def log_prob_grad(x):
-            _, grad = self._func_max(x)
-            return grad
+        # def log_prob_grad(x):
+        #     _, grad = self._func_max(x)
+        #     return grad
 
         kernel = RadialBasis(length_scale=length_scale)
         svgd = SVGD(kernel=kernel, n_iter=n_iter, step_size=step_size,
                     alpha=alpha, eps=eps)
 
-        return svgd.optimize(log_prob_grad, batch_size, bounds)
+        return svgd.optimize(self._func_max, batch_size, bounds)

@@ -15,10 +15,13 @@ class Distortion(ABC):
         pass
 
 
-class DistortionIdentity(Distortion):
+class DistortionConstant(Distortion):
+
+    def __init__(self, c=1.):
+        self.c = c
 
     def __call__(self, beta):
-        return beta
+        return self.c
 
 
 class DistortionExpDecay(Distortion):
@@ -30,7 +33,7 @@ class DistortionExpDecay(Distortion):
         self.lambd = lambd
 
     def __call__(self, beta):
-        return np.pow(beta, -self.lambd)
+        return np.power(beta, -self.lambd)
 
 
 def rank(a):
@@ -56,6 +59,7 @@ def rank(a):
     >>> np.array_equal(100. * rank(a),
     ...                [percentileofscore(a, x, "weak") for x in a])
     True
+
     """
     assert a.ndim == 1, "only support 1d arrays!"
     return np.less_equal(a, np.expand_dims(a, axis=1)).mean(axis=1)
@@ -64,21 +68,22 @@ def rank(a):
 class SVGD:
 
     def __init__(self, kernel=RadialBasis(), n_iter=1000, step_size=1e-3,
-                 tau=1., alpha=.9, eps=1e-6):
+                 alpha=.9, eps=1e-6, tau=1., distortion=DistortionConstant()):
         self.kernel = kernel
         self.n_iter = n_iter
         self.step_size = step_size
-        self.tau = tau
         self.alpha = alpha
         self.eps = eps
+        self.tau = tau
+        self.distortion = distortion
 
-    def optimize_from_init(self, log_prob_grad, x_init, bounds=None,
+    def optimize_from_init(self, func, x_init, bounds=None,
                            callback=None):
         """
         Optimize from specified starting points.
         """
-        assert bounds is None or isinstance(bounds, Bounds), \
-            "bounds must be instance of `scipy.optimize.Bounds`"
+        if bounds is not None:
+            (low, high), _ = from_bounds(bounds)
 
         n_init = x_init.shape[0]
         grad_hist = None
@@ -88,7 +93,12 @@ class SVGD:
 
             K, K_grad = self.kernel.value_and_grad(x)
 
-            grad = (K @ log_prob_grad(x) + self.tau * K_grad)
+            f, f_grad = func(x)
+
+            zeta = self.distortion(rank(f))
+            Zeta = np.expand_dims(zeta, axis=-1)
+
+            grad = (K @ (Zeta * f_grad) + self.tau * K_grad)
             grad /= n_init
 
             # adadelta / adagrad
@@ -102,7 +112,7 @@ class SVGD:
             x += self.step_size * adj_grad
 
             if bounds is not None:
-                x = x.clip(bounds.lb, bounds.ub)
+                x = x.clip(low, high)
 
             if callback is not None:
                 callback(x)
