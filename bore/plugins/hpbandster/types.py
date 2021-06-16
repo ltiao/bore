@@ -23,7 +23,7 @@ class DenseConfigurationSpace(CS.ConfigurationSpace):
         # and other metadata ignored
         self.add_hyperparameters(other.get_hyperparameters())
 
-        nums, cats, size_sparse, size_dense = self.get_mappings()
+        nums, cats, size_sparse, size_dense = self._get_mappings()
 
         if nums:
             self.num_src, self.num_trg = map(np.uintp, zip(*nums))
@@ -41,8 +41,17 @@ class DenseConfigurationSpace(CS.ConfigurationSpace):
         return self.size_sparse if sparse else self.size_dense
 
     def sample_configuration(self, size=1):
-        config = super(DenseConfigurationSpace, self).sample_configuration(size=size)
-        return DenseConfiguration(self, values=config.get_dictionary())
+
+        config_sparse = super(DenseConfigurationSpace, self) \
+            .sample_configuration(size=size)
+
+        configs_sparse_list = config_sparse if size > 1 else [config_sparse]
+
+        configs = []
+        for config in configs_sparse_list:
+            configs.append(DenseConfiguration(self, values=config.get_dictionary()))
+
+        return configs if size > 1 else configs.pop()
 
     def get_bounds(self):
         lowers = np.zeros(self.size_dense)
@@ -51,7 +60,7 @@ class DenseConfigurationSpace(CS.ConfigurationSpace):
         # return list(zip(lowers, uppers))
         return Bounds(lowers, uppers)
 
-    def get_mappings(self):
+    def _get_mappings(self):
 
         nums = []
         cats = []
