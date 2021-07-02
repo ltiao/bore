@@ -1,10 +1,12 @@
 import numpy as np
 
 
-def _check_length_scale(n_samples, sum_sqr_diff, length_scale=None):
+def _check_length_scale(n_samples, sum_sqr_diff, length_scale=None, eps=1e-6):
     if length_scale is None:
         h = np.median(sum_sqr_diff)
         length_scale = np.sqrt(.5 * h / np.log(n_samples+1))
+    if eps is not None:
+        length_scale = np.maximum(length_scale, eps)
     return length_scale
 
 

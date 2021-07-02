@@ -29,7 +29,6 @@ class DistortionExpDecay(Distortion):
     Importance weight or distortion function :math:`omega(\beta)`
     """
     def __init__(self, lambd=1.):
-        assert lambd > 0, "lambda must be positive!"
         self.lambd = lambd
 
     def __call__(self, beta):

@@ -2,6 +2,7 @@ import tensorflow as tf
 
 from .optimizers import minimize_multi_start
 from .optimizers.svgd import SVGD
+from .optimizers.svgd.base import DistortionConstant, DistortionExpDecay
 from .optimizers.svgd.kernels import RadialBasis
 from .base import convert
 
@@ -56,7 +57,11 @@ class BatchMaximizableMixin(MaximizableMixin):
         self._func_max = convert(self, transform=transform)
 
     def argmax_batch(self, batch_size, bounds, length_scale=None, n_iter=1000,
-                     step_size=1e-3, alpha=.9, eps=1e-6, random_state=None):
+                     step_size=1e-3, alpha=.9, eps=1e-6, tau=1.0, lambd=None,
+                     random_state=None):
+
+        distortion = DistortionConstant() if lambd is None \
+            else DistortionExpDecay(lambd=lambd)
 
         # def log_prob_grad(x):
         #     _, grad = self._func_max(x)
@@ -64,7 +69,7 @@ class BatchMaximizableMixin(MaximizableMixin):
 
         kernel = RadialBasis(length_scale=length_scale)
         svgd = SVGD(kernel=kernel, n_iter=n_iter, step_size=step_size,
-                    alpha=alpha, eps=eps)
+                    alpha=alpha, eps=eps, tau=tau, distortion=distortion)
 
         return svgd.optimize(self._func_max, batch_size, bounds=bounds,
                              random_state=random_state)
