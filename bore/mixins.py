@@ -1,10 +1,13 @@
+import numpy as np
 import tensorflow as tf
 
+from .base import convert
 from .optimizers import minimize_multi_start
 from .optimizers.svgd import SVGD
 from .optimizers.svgd.base import DistortionConstant, DistortionExpDecay
 from .optimizers.svgd.kernels import RadialBasis
-from .base import convert
+from .optimizers.utils import from_bounds
+from .utils.deduplicate import pad_unique_random
 
 
 class MaximizableMixin:
@@ -58,7 +61,7 @@ class BatchMaximizableMixin(MaximizableMixin):
 
     def argmax_batch(self, batch_size, bounds, length_scale=None, n_iter=1000,
                      step_size=1e-3, alpha=.9, eps=1e-6, tau=1.0, lambd=None,
-                     random_state=None):
+                     foo=None, random_state=None):
 
         distortion = DistortionConstant() if lambd is None \
             else DistortionExpDecay(lambd=lambd)
@@ -71,5 +74,10 @@ class BatchMaximizableMixin(MaximizableMixin):
         svgd = SVGD(kernel=kernel, n_iter=n_iter, step_size=step_size,
                     alpha=alpha, eps=eps, tau=tau, distortion=distortion)
 
-        return svgd.optimize(self._func_max, batch_size, bounds=bounds,
-                             random_state=random_state)
+        particles = svgd.optimize(self._func_max, batch_size, bounds=bounds,
+                                  random_state=random_state)
+
+        # batch = pad_unique_random(particles, size=batch_size, bounds=bounds,
+        #                           B=foo, random_state=random_state)
+
+        return particles
