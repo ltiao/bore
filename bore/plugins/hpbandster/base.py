@@ -3,6 +3,7 @@ import tensorflow as tf
 import tensorflow.keras.backend as K
 
 from tensorflow.keras.losses import BinaryCrossentropy
+from tensorflow.keras.regularizers import l2
 
 from hpbandster.optimizers.hyperband import HyperBand
 from hpbandster.core.base_config_generator import base_config_generator
@@ -22,9 +23,9 @@ class BORE(HyperBand):
                  gamma=None, num_random_init=10, random_rate=0.1, retrain=False,
                  num_starts=5, num_samples=1024, batch_size=64,
                  num_steps_per_iter=1000, num_epochs=None, optimizer="adam",
-                 num_layers=2, num_units=32, activation="elu",
+                 num_layers=2, num_units=32, activation="elu", l2_factor=None,
                  transform="sigmoid", method="L-BFGS-B", max_iter=1000,
-                 ftol=1e-9, distortion=None, restart=False, seed=None, **kwargs):
+                 ftol=1e-9, distortion=None, seed=None, **kwargs):
 
         if gamma is None:
             gamma = 1/eta
@@ -34,6 +35,7 @@ class BORE(HyperBand):
                                        random_rate=random_rate, retrain=retrain,
                                        classifier_kws=dict(num_layers=num_layers,
                                                            num_units=num_units,
+                                                           l2_factor=l2_factor,
                                                            activation=activation,
                                                            optimizer=optimizer),
                                        fit_kws=dict(batch_size=batch_size,
@@ -106,6 +108,11 @@ class ClassifierConfigGenerator(base_config_generator):
         self.activation = classifier_kws.get("activation", "elu")
         self.optimizer = classifier_kws.get("optimizer", "adam")
 
+        l2_factor = classifier_kws.get("l2_factor")
+
+        self.kernel_regularizer = None if l2_factor is None else l2(l2_factor)
+        self.bias_regularizer = None if l2_factor is None else l2(l2_factor)
+
         self.retrain = retrain
         self.logit = None
 
@@ -148,7 +155,9 @@ class ClassifierConfigGenerator(base_config_generator):
                                              num_layers=self.num_layers,
                                              num_units=self.num_units,
                                              layer_kws=dict(
-                                                activation=self.activation))
+                                                activation=self.activation,
+                                                kernel_regularizer=self.kernel_regularizer,
+                                                bias_regularizer=self.bias_regularizer))
         network.compile(optimizer=self.optimizer, metrics=["accuracy"],
                         loss=BinaryCrossentropy(from_logits=True))
         network.summary(print_fn=self.logger.debug)
