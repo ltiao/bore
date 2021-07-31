@@ -100,6 +100,8 @@ Using this method, the standard optimization loop can be implemented as follows:
       features.append(x_next)
       targets.append(y_next)
 
+For complete end-to-end scripts and to reproduce our results, take a look at the associated `experiments <https://github.com/ltiao/bore-experiments>`_ repository.
+
 Features
 --------
 
