@@ -12,7 +12,7 @@ with open('HISTORY.rst') as history_file:
 
 requirements = [
     "numpy==1.20.3",
-    "scipy==1.6.3",
+    "scipy==1.7.0",
     "Cython==0.29.23",
     "ConfigSpace==0.4.18",
 ]
