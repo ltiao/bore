@@ -5,12 +5,12 @@
 import numpy as np
 import pytest
 
-
+from scipy.optimize import Bounds
 from bore.models import StackedRecurrentFactory
 
 
 @pytest.mark.parametrize("seed", [0, 42, 8888])
-def test_weights_equal(seed):
+def test_stacked_recurrent_factory(seed):
 
     input_dim = 2
     output_dim = 1
@@ -49,3 +49,11 @@ def test_weights_equal(seed):
     assert y.shape == (n_samples, output_dim)
 
     np.testing.assert_array_equal(Y[::, n_steps - 1, ::], y)
+
+    opt = network2.argmax(bounds=Bounds(lb=[0, 0], ub=[1, 1]),
+                          num_starts=5,
+                          num_samples=1024,
+                          method="L-BFGS-B",
+                          options=dict(maxiter=1000, ftol=1e-9),
+                          random_state=random_state)
+    print(opt)
