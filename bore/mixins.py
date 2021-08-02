@@ -1,10 +1,13 @@
 import tensorflow as tf
 
-from .optimizers import minimize_multi_start
+from scipy.optimize import minimize
+from sklearn.utils import check_random_state
+
+from .base import convert
+from .optimizers.utils import from_bounds
 from .optimizers.svgd import SVGD
 from .optimizers.svgd.base import DistortionConstant, DistortionExpDecay
 from .optimizers.svgd.kernels import RadialBasis
-from .base import convert
 
 
 class MaximizableMixin:
@@ -17,11 +20,40 @@ class MaximizableMixin:
 
     def maxima(self, bounds, num_starts=5, num_samples=1024, method="L-BFGS-B",
                options=dict(maxiter=1000, ftol=1e-9), random_state=None):
-        return minimize_multi_start(self._func_min, bounds=bounds,
-                                    num_starts=num_starts,
-                                    num_samples=num_samples,
-                                    random_state=random_state,
-                                    method=method, jac=True, options=options)
+
+        # TODO(LT): Deprecated until bug fixed.
+        # return minimize_multi_start(self._func_min, bounds=bounds,
+        #                             num_starts=num_starts,
+        #                             num_samples=num_samples,
+        #                             random_state=random_state,
+        #                             method=method, jac=True, options=options)
+
+        random_state = check_random_state(random_state)
+
+        if num_samples is None:
+            num_samples = num_starts
+
+        assert num_samples >= num_starts, \
+            "number of random samples (`num_samples`) must be " \
+            "greater than number of starting points (`num_starts`)"
+
+        (low, high), dim = from_bounds(bounds)
+
+        # TODO(LT): Allow alternative arbitary generator function callbacks
+        # to support e.g. Gaussian sampling, low-discrepancy sequences, etc.
+        X_init = random_state.uniform(low=low, high=high, size=(num_samples, dim))
+        y_init = self.predict(X_init)
+
+        ind = y_init.squeeze(axis=-1).argsort()
+
+        results = []
+        for i in range(num_starts):
+            x_init = X_init[ind[i]]
+            result = minimize(self._func_min, x0=x_init, method=method,
+                              jac=True, bounds=bounds, options=options)
+            results.append(result)
+
+        return results
 
     def argmax(self, bounds, print_fn=print, filter_fn=lambda res: True,
                *args, **kwargs):
