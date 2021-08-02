@@ -100,7 +100,7 @@ def test_kernel(n_samples, n_features, length_scale, seed):
     np.testing.assert_array_almost_equal(K_grad, dxkxy, decimal=10)
 
 
-@pytest.mark.parametrize("n_samples", [1, 4, 16])
+@pytest.mark.parametrize("n_samples", [2, 4, 16])
 @pytest.mark.parametrize("n_features", [1, 2, 64])
 @pytest.mark.parametrize("seed", [42, 8888])
 def test_kernel_median_trick(n_samples, n_features, seed):
