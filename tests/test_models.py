@@ -75,7 +75,8 @@ def test_stacked_recurrent_factory(seed):
         num_units=n_units,
     )
 
-    X_test = random_state.rand(n_samples, input_dim)
+    X_test = random_state.uniform(low=bounds.lb, high=bounds.ub,
+                                  size=(n_samples, input_dim))
     X_test_broad = np.expand_dims(X_test, axis=1)
     X_test_tiled = np.tile(X_test_broad, reps=(n_steps, 1))
 
