@@ -40,8 +40,7 @@ def unbatch(fn):
     def new_fn(input):
         batch_input = tf.expand_dims(input, axis=0)
         batch_output = fn(batch_input)
-        output = tf.squeeze(batch_output, axis=0)
-        return output
+        return tf.squeeze(batch_output, axis=0)
 
     return new_fn
 
