@@ -1,17 +1,19 @@
 import numpy as np
+# import tensorflow as tf
+import tensorflow.keras.backend as K
 
-from hpbandster.core.base_config_generator import base_config_generator
-from hpbandster.optimizers.hyperband import HyperBand
-from scipy.optimize import minimize
 from tensorflow.keras.losses import BinaryCrossentropy
+from tensorflow.keras.regularizers import l2
 
-from ..decorators import numpy_io, squeeze, unbatch, value_and_gradient
-from ..engine import Record, truncated_normal
-from ..optimizers import multi_start, random_start
-from ..types import DenseConfiguration, DenseConfigurationSpace
+from hpbandster.optimizers.hyperband import HyperBand
+from hpbandster.core.base_config_generator import base_config_generator
 
-minimize_multi_start = multi_start(minimizer_fn=minimize)
-minimize_random_start = random_start(minimizer_fn=minimize)
+from .types import DenseConfigurationSpace, array_from_dict, dict_from_array
+from .base import TRANSFORMS
+from ...base import maybe_distort
+from ...math import steps_per_epoch
+from ...data import MultiFidelityRecord
+from ...models import StackedRecurrentFactory
 
 
 class BOREHyperband(HyperBand):
@@ -20,6 +22,7 @@ class BOREHyperband(HyperBand):
                  gamma=None, num_random_init=10, random_rate=0.1, retrain=False,
                  num_starts=5, num_samples=1024, batch_size=64,
                  num_steps_per_iter=1000, num_epochs=None, optimizer="adam",
+                 mask_value=-1.,
                  num_layers=2, num_units=32, activation="elu", l2_factor=None,
                  transform="sigmoid", method="L-BFGS-B", max_iter=1000,
                  ftol=1e-9, distortion=None, seed=None, **kwargs):
@@ -37,7 +40,8 @@ class BOREHyperband(HyperBand):
                                                 num_units=num_units,
                                                 l2_factor=l2_factor,
                                                 activation=activation,
-                                                optimizer=optimizer),
+                                                optimizer=optimizer,
+                                                mask_value=mask_value),
                                                fit_kws=dict(
                                                 batch_size=batch_size,
                                                 num_steps_per_iter=num_steps_per_iter,
@@ -82,187 +86,159 @@ class BOREHyperband(HyperBand):
 
 
 class SequenceClassifierConfigGenerator(base_config_generator):
-    """
-    class to implement random sampling from a ConfigSpace
-    """
-    def __init__(self, config_space, gamma=1/3, num_random_init=10, random_rate=None,
-                 classifier_kws=dict(num_layers=2, num_units=32,
-                                     optimizer="adam", mask_value=1e+9),
-                 fit_kws=dict(batch_size=64, num_steps_per_iter=100),
-                 optimizer_kws=dict(final_activation="sigmoid",
-                                    method="L-BFGS-B",
-                                    max_iter=100,
-                                    ftol=1e-2,
-                                    distortion=None,
-                                    num_start_points=3,
-                                    restart=False),
-                 seed=None, **kwargs):
+
+    def __init__(self, config_space, gamma, num_random_init, random_rate,
+                 retrain, classifier_kws, fit_kws, optimizer_kws, seed, **kwargs):
 
         super(SequenceClassifierConfigGenerator, self).__init__(**kwargs)
 
         assert 0. < gamma < 1., "`gamma` must be in (0, 1)"
-        assert num_random_init > 0
+        assert num_random_init > 0, "number of initial random designs " \
+            "must be non-zero!"
         assert random_rate is None or 0. <= random_rate < 1., \
             "`random_rate` must be in [0, 1)"
 
+        self.gamma = gamma
         self.num_random_init = num_random_init
         self.random_rate = random_rate
 
         # Build ConfigSpace with one-hot-encoded categorical inputs and
         # initialize bounds
         self.config_space = DenseConfigurationSpace(config_space, seed=seed)
+
+        self.input_dim = self.config_space.get_dimensions(sparse=False)
         self.bounds = self.config_space.get_bounds()
 
-        input_dim = self.config_space.size_dense
+        self.optimizer = classifier_kws.get("optimizer", "adam")
+        self.mask_value = classifier_kws.get("mask_value", 1e-9)
 
-        num_layers = classifier_kws["num_layers"]
-        num_units = classifier_kws["num_units"]
-        optimizer = classifier_kws["optimizer"]
+        num_layers = classifier_kws.get("num_layers", 2)
+        num_units = classifier_kws.get("num_units", 32)
+        activation = classifier_kws.get("activation", "elu")
 
-        self.mask_value = classifier_kws["mask_value"]
+        l2_factor = classifier_kws.get("l2_factor")
 
-        self.factory = StackedRecurrentFactory(input_dim=input_dim,
-                                               output_dim=1,
-                                               num_layers=num_layers,
-                                               num_units=num_units)
+        kernel_regularizer = None if l2_factor is None else l2(l2_factor)
+        bias_regularizer = None if l2_factor is None else l2(l2_factor)
 
-        # Build neural network probabilistic classifier
-        self.logger.debug("Building and compiling network...")
-        self.logit = self._build_compile_network(optimizer)
-        self.logit.summary(print_fn=self.logger.debug)
+        self.model_factory = StackedRecurrentFactory(
+            input_dim=self.input_dim,
+            output_dim=1,
+            num_layers=num_layers,
+            num_units=num_units,
+            layer_kws=dict(
+                activation=activation,
+                kernel_regularizer=kernel_regularizer,
+                bias_regularizer=bias_regularizer
+            )
+        )
+
+        if retrain:
+            raise NotImplementedError
+        self.retrain = retrain
+
+        self.logit = self._build_compile_network()
+        self.funcs = {}
 
         # Options for fitting neural network parameters
-        self.batch_size = fit_kws["batch_size"]
-        self.num_steps_per_iter = fit_kws["num_steps_per_iter"]
+        self.batch_size = fit_kws.get("batch_size", 64)
+        self.num_steps_per_iter = fit_kws.get("num_steps_per_iter", 100)
+        self.num_epochs = fit_kws.get("num_epochs")
 
         # Options for maximizing the acquisition function
-        self.final_activation = optimizer_kws["final_activation"]
-        # The (negative) acquitions functions at various rungs.
-        # TODO(LT): the name `losses` is not descriptive and a bit misleading.
-        self.losses = {}
 
-        assert optimizer_kws["num_start_points"] > 0
-        self.num_start_points = optimizer_kws["num_start_points"]
-        self.method = optimizer_kws["method"]
-        self.ftol = optimizer_kws["ftol"]
-        self.max_iter = optimizer_kws["max_iter"]
-        self.distortion = optimizer_kws["distortion"]
-        self.restart = optimizer_kws["restart"]
+        transform_name = optimizer_kws.get("transform", "sigmoid")
+        assert transform_name in TRANSFORMS, \
+            f"`transform` must be one of {tuple(TRANSFORMS.keys())}"
+        self.transform = TRANSFORMS.get(transform_name)
 
-        self.record = Record(gamma=gamma)
+        assert optimizer_kws.get("num_starts") > 0
+        self.num_starts = optimizer_kws.get("num_starts", 5)
+        self.num_samples = optimizer_kws.get("num_samples", 1024)
+        self.method = optimizer_kws.get("method", "L-BFGS-B")
+        self.ftol = optimizer_kws.get("ftol", 1e-9)
+        self.max_iter = optimizer_kws.get("max_iter", 1000)
+        self.distortion = optimizer_kws.get("distortion")
+
+        self.record = MultiFidelityRecord(gamma=gamma)
 
         self.seed = seed
         self.random_state = np.random.RandomState(seed)
 
-    def _array_from_dict(self, dct):
-        config = DenseConfiguration(self.config_space, values=dct)
-        return config.to_array()
-
-    def _dict_from_array(self, array):
-        config = DenseConfiguration.from_array(self.config_space,
-                                               array_dense=array)
-        return config.get_dictionary()
-
-    def _get_steps_per_epoch(self, dataset_size):
-        steps_per_epoch = int(np.ceil(np.true_divide(dataset_size,
-                                                     self.batch_size)))
-        return steps_per_epoch
-
-    def _build_compile_network(self, optimizer):
-        network = self.factory.build_many_to_many(mask_value=self.mask_value)
-        network.compile(optimizer=optimizer, metrics=["accuracy"],
+    def _build_compile_network(self):
+        self.logger.debug("Building and compiling network...")
+        network = self.model_factory.build_many_to_many(mask_value=self.mask_value)
+        network.compile(optimizer=self.optimizer, metrics=["accuracy"],
                         loss=BinaryCrossentropy(from_logits=True))
+        network.summary(print_fn=self.logger.debug)
         return network
 
-    def _build_loss(self, rung):
-        """
-        Returns the loss, i.e. the (negative) acquisition function to be
-        minimized through the `scipy.optimize` interface.
-        """
-        num_steps = rung + 1  # rungs are zero-based
-        classifier = self.factory.build_one_to_one(num_steps, activation=self.final_activation)
-        # classifier.set_weights(weights=self.logit.get_weights())
+    # def _maybe_create_classifier(self):
+    #     # Build neural network probabilistic classifier
+    #     if self.logit is None:
+    #         self.model_factory = StackedRecurrentFactory(
+    #             input_dim=self.input_dim,
+    #             output_dim=1,
+    #             num_layers=self.num_layers,
+    #             num_units=self.num_units,
+    #             layer_kws=dict(activation=self.activation,
+    #                            kernel_regularizer=self.kernel_regularizer,
+    #                            bias_regularizer=self.bias_regularizer))
+    #         self.logit = self._build_compile_network()
 
-        @numpy_io
-        @value_and_gradient  # (D,) -> () to (D,) -> (), (D,)
-        @squeeze(axis=-1)  # (D,) -> (1,) to (D,) -> ()
-        @unbatch  # (None, D) -> (None, 1) to (D,) -> (1,)
-        def loss(x):
-            return - classifier(x)
+    # def _maybe_delete_classifier(self):
+    #     if self.retrain:
+    #         # if we are not persisting model across optimization iterations
+    #         # delete and clear from memory
+    #         self.logger.debug("Deleting model...")
+    #         K.clear_session()
+    #         del self.logit
+    #         self.logit = None  # reset
 
-        return loss
+    def _update_classifier(self):
 
-    def _update_model(self):
-
-        inputs, targets = self.record.sequences_padded(binary=True, pad_value=self.mask_value)
-
+        inputs, targets = self.record.sequences_padded(binary=True,
+                                                       pad_value=self.mask_value)
         self.logger.debug(f"Input sequence shape: {inputs.shape}")
         self.logger.debug(f"Target sequence shape: {targets.shape}")
 
-        num_epochs = 10
+        dataset_size = self.record.num_features()
+        num_steps = steps_per_epoch(dataset_size, self.batch_size)
+
+        num_epochs = self.num_epochs
+        if num_epochs is None:
+            num_epochs = self.num_steps_per_iter // num_steps
+            self.logger.debug("Argument `num_epochs` has not been specified. "
+                              f"Setting num_epochs={num_epochs}")
+        else:
+            self.logger.debug("Argument `num_epochs` is specified "
+                              f"(num_epochs={num_epochs}). "
+                              f"Ignoring num_steps_per_iter={self.num_steps_per_iter}")
+
+        callbacks = []
+        # TODO(LT): Add option
+        # early_stopping = EarlyStopping(monitor="loss", min_delta=1e-3,
+        #                                verbose=True, patience=5, mode="min")
+        # callbacks.append(early_stopping)
+
         self.logit.fit(inputs, targets, epochs=num_epochs,
-                       batch_size=self.batch_size, verbose=False)
+                       batch_size=self.batch_size, callbacks=callbacks,
+                       verbose=False)
         loss, accuracy = self.logit.evaluate(inputs, targets, verbose=False)
 
         self.logger.info(f"[Model fit: loss={loss:.3f}, "
                          f"accuracy={accuracy:.3f}] "
+                         # f"dataset size: {dataset_size}, "
                          f"batch size: {self.batch_size}, "
+                         # f"steps per epoch: {num_steps}, "
+                         f"num steps per iter: {self.num_steps_per_iter}, "
                          f"num epochs: {num_epochs}")
 
-    def _get_maximum(self, rung):
-
-        self.logger.debug(f"Beginning multi-start maximization at rung {rung} "
-                          f"with {self.num_start_points} starts...")
-
-        # Negative acquisition functions specific to a rung. These are built
-        # on-the-fly and then cached for subsequent use.
-        loss = self.losses.setdefault(rung, self._build_loss(rung))
-
-        # TODO(LT): There is a lot of redundant code duplicating and confusing
-        # variable naming here.
-        if not self.restart:
-            res = None
-            i = 0
-            while res is None or not (res.success or res.status == 1) \
-                    or self.record.is_duplicate(res.x):
-                res = minimize_random_start(loss, self.bounds,
-                                            num_samples=self.num_start_points,
-                                            method=self.method, jac=True,
-                                            options=dict(maxiter=self.max_iter,
-                                                         ftol=self.ftol),
-                                            random_state=self.random_state)
-
-                self.logger.debug(f"[Maximum {i+1:02d}: value={-res.fun:.3f}] "
-                                  f"success: {res.success}, "
-                                  f"iterations: {res.nit:02d}, "
-                                  f"status: {res.status} ({res.message})")
-                i += 1
-
-            return res
-
-        results = minimize_multi_start(loss, self.bounds,
-                                       num_restarts=self.num_start_points,
-                                       method=self.method, jac=True,
-                                       options=dict(maxiter=self.max_iter,
-                                                    ftol=self.ftol),
-                                       random_state=self.random_state)
-
-        res_best = None
-        for i, res in enumerate(results):
-            self.logger.debug(f"[Maximum {i+1:02d}/{self.num_start_points:02d}: "
-                              f"value={-res.fun:.3f}] success: {res.success}, "
-                              f"iterations: {res.nit:02d}, status: {res.status}"
-                              f" ({res.message})")
-
-            # TODO(LT): Create Enum type for these status codes
-            # status == 1 signifies maximum iteration reached, which we don't
-            # want to treat as a failure condition.
-            if (res.success or res.status == 1) and \
-                    not self.record.is_duplicate(res.x):
-                if res_best is None or res.fun < res_best.fun:
-                    res_best = res
-
-        return res_best
+    def _is_unique(self, res):
+        is_duplicate = self.record.is_duplicate(res.x)
+        if is_duplicate:
+            self.logger.warn("Duplicate detected! Skipping...")
+        return not is_duplicate
 
     def get_config(self, budget):
 
@@ -279,47 +255,58 @@ class SequenceClassifierConfigGenerator(base_config_generator):
 
         # TODO(LT): Should just skip based on number of unique input features
         # observed so far.
-        # Skip any model-based computation if there simply isn't enough
-        # observed data yet
-        highest = self.record.highest_rung(min_size=self.num_random_init)
-        if highest is None:
+        # Insufficient training data
+        t = self.record.highest_rung(min_size=self.num_random_init)
+        if t is None:
             self.logger.debug("There are no rungs with at least "
                               f"{self.num_random_init} observations. "
                               "Suggesting random candidate...")
             return (config_random_dict, {})
 
-        self.logger.debug(f"Rung {highest} is the highest with at least "
+        self.logger.debug(f"Rung {t} is the highest with at least "
                           f"{self.num_random_init} observations.")
 
-        # Update model
-        self._update_model()
+        # # Create classifier (if retraining from scratch every iteration)
+        # self._maybe_create_classifier()
 
-        # Maximize acquisition function
-        opt = self._get_maximum(highest)
+        # Train classifier
+        self._update_classifier()
+
+        # Classifier specific to a rung. These are built on-the-fly and then
+        # cached for use in subsquent iterations.
+        num_steps = t + 1  # rungs are zero-based
+        func = self.funcs.setdefault(t, self.model_factory.build_one_to_one(num_steps, transform=self.transform))
+
+        # Maximize classifier wrt input
+        self.logger.debug("Beginning multi-start maximization with "
+                          f"{self.num_starts} starts...")
+        opt = func.argmax(self.bounds,
+                          num_starts=self.num_starts,
+                          num_samples=self.num_samples,
+                          method=self.method,
+                          options=dict(maxiter=self.max_iter,
+                                       ftol=self.ftol),
+                          print_fn=self.logger.debug,
+                          filter_fn=self._is_unique,
+                          random_state=self.random_state)
         if opt is None:
             # TODO(LT): It's actually important to report which of these
             # failures occurred...
             self.logger.warn("[Glob. maximum: not found!] Either optimization "
-                             f"failed in all {self.num_start_points} starts, or "
+                             f"failed in all {self.num_starts} starts, or "
                              "all maxima found have been evaluated previously!"
                              " Suggesting random candidate...")
             return (config_random_dict, {})
 
         loc = opt.x
         self.logger.info(f"[Glob. maximum: value={-opt.fun:.3f} x={loc}]")
+        config_opt_arr = maybe_distort(loc, self.distortion,
+                                       self.bounds, self.random_state,
+                                       print_fn=self.logger.info)
+        config_opt_dict = dict_from_array(self.config_space, config_opt_arr)
 
-        if self.distortion is None:
-            config_opt_arr = loc
-        else:
-            dist = truncated_normal(loc=loc,
-                                    scale=self.distortion,
-                                    lower=self.bounds.lb,
-                                    upper=self.bounds.ub)
-            config_opt_arr = dist.rvs(random_state=self.random_state)
-            self.logger.info(f"Suggesting x={config_opt_arr} "
-                             f"(distortion={self.distortion:.3E})")
-
-        config_opt_dict = self._dict_from_array(config_opt_arr)
+        # # Delete classifier (if retraining from scratch every iteration)
+        # self._maybe_delete_classifier()
 
         return (config_opt_dict, {})
 
@@ -327,11 +314,10 @@ class SequenceClassifierConfigGenerator(base_config_generator):
 
         super(SequenceClassifierConfigGenerator, self).new_result(job)
 
-        # TODO(LT): support multi-fidelity
         budget = job.kwargs["budget"]
 
         config_dict = job.kwargs["config"]
-        config_arr = self._array_from_dict(config_dict)
+        config_arr = array_from_dict(self.config_space, config_dict)
 
         loss = job.result["loss"]
 
@@ -341,8 +327,3 @@ class SequenceClassifierConfigGenerator(base_config_generator):
                           f"budgets: {self.record.budgets()}, "
                           f"rung sizes: {self.record.rung_sizes()}")
         self.logger.debug(f"[Data] thresholds: {self.record.thresholds()}")
-
-        X = self.record.test()
-        X_uniq, X_counts = np.unique(X, return_counts=True, axis=0)
-        self.logger.debug(f"[Data] Input feature occurrences: {X_counts}")
-        self.logger.debug(X_uniq)

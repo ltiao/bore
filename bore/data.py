@@ -2,10 +2,8 @@ import numpy as np
 
 
 from tensorflow.keras.preprocessing.sequence import pad_sequences
-from collections import namedtuple
-
-
-Evaluations = namedtuple('Evaluations', ["targets", "inputs"])
+# from collections import defaultdict, namedtuple
+# from warnings import warn
 
 
 class Record:
@@ -55,42 +53,52 @@ class Record:
                    for x_prev in self.features)
 
 
-class RecordWIP:
+class MultiFidelityRecord:
 
     def __init__(self, gamma=None):
-        self.rungs = {}
+        self._data = {}  # TODO(LT): Find more descriptive name
+        self._targets = {}
         self.gamma = gamma
 
     @staticmethod
-    def get_key(x):
+    def compute_key(x):
         return tuple(x.tolist())
 
     def append(self, x, y, b):
-        e = self.rungs.setdefault(b, Evaluations(targets=[], inputs=[]))
-        e.inputs.append(x)
-        e.targets.append(y)
 
-    def test(self):
+        k = self.compute_key(x)
+        dct = self._data.setdefault(k, {})
+        dct[b] = y
 
-        inputs = []
-        for b in self.rungs:
-            inputs.extend(self.rungs[b].inputs)
-        return np.vstack(inputs)
+        # Note that there is no information contained in `self._targets`
+        # that we couldn't derive from `self._data` but we are using this
+        # additional data structure for time-efficiency albeit at the expense
+        # of memory-efficiency.
+        ys = self._targets.setdefault(b, [])
+        ys.append(y)
+
+        # TODO(LT): Decide how best to handle situation where y has already
+        #   been recorded for a given (x, b)
+        # if b in d and d[b] != y:
+        #     print(f"target value for x={x} at budget b={b} already recorded! "
+        #           f"Replacing... (old={d[b]:.3f}, new={y:.3f})")
 
     def num_rungs(self):
         """
         Get the total number of rungs recorded.
+
         Returns
         -------
         int
             Total number of rungs recorded.
         """
-        return len(self.rungs)
+        return len(self._targets)
 
     def highest_rung(self, min_size=1):
         """
         Get the highest rung attained so far that has recorded at least some
         given number of evaluations.
+
         Parameters
         ----------
         min_size : int, optional
@@ -104,36 +112,58 @@ class RecordWIP:
         # max(filter(lambda u: self._rung_size_from_budget(u[1]) >= min_size,
         #            enumerate(sorted(self.rungs))), default=None)
         t_max = None
-        for t, b in enumerate(sorted(self.rungs)):
+        for t, b in enumerate(self.budgets()):
             if self._rung_size_from_budget(b) >= min_size:
                 t_max = t
         return t_max
 
-    def budgets(self):
-        return sorted(self.rungs.keys())
+    def budgets(self, reverse=False):
+        return sorted(self._targets, reverse=reverse)
 
     def budget(self, t):
+        """
+        Get the budget associated with a given rung.
+
+        Parameters
+        ----------
+        t : int
+            A nonnegative integer representing the rung.
+
+        Returns
+        -------
+        float
+            The budget associated with the given rung.
+        """
         budgets = self.budgets()
         return budgets[t]
 
     def _rung_size_from_budget(self, b):
-        rung_size = len(self.rungs[b].targets)
-        assert rung_size == len(self.rungs[b].inputs), \
-            f"number of inputs and targets at budget `{b}` don't match!"
-        return rung_size
+        # return sum(b in dct for dct in self._data.values())
+        return len(self._targets[b])
+
+    def rung_sizes(self):
+        return [self._rung_size_from_budget(b) for b in self.budgets()]
 
     def rung_size(self, t):
         b = self.budget(t)
         return self._rung_size_from_budget(b)
 
-    def rung_sizes(self):
-        return [self._rung_size_from_budget(b) for b in self.budgets()]
-
     def size(self):
         return sum(self.rung_sizes())
 
+    def num_features(self):
+        return len(self._data)
+
+    def _targets_from_budget(self, b):
+        return self._targets[b]
+
+    def targets(self, t):
+        b = self.budget(t)
+        return self._targets_from_budget(b)
+
     def _threshold_from_budget(self, b):
-        tau = np.quantile(self.rungs[b].targets, q=self.gamma)
+        targets = self._targets_from_budget(b)
+        tau = np.quantile(targets, q=self.gamma)
         return tau
 
     def threshold(self, t):
@@ -144,14 +174,15 @@ class RecordWIP:
         return [self._threshold_from_budget(b) for b in self.budgets()]
 
     def _binary_labels_from_budget(self, b):
+        targets = self._targets_from_budget(b)
         tau = self._threshold_from_budget(b)
-        return np.less(self.rungs[b].targets, tau)
+        return np.less_equal(targets, tau)
 
     def binary_labels(self, t):
         b = self.budget(t)
         return self._binary_labels_from_budget(b)
 
-    def sequences_dict(self, binary=True):
+    def sequences_dict(self, pad_value=-1., binary=True, return_indices=False):
         """
         Create a dictionary of target sequences (lists of target labels of
         varying length), with the corresponding input (represented by a tuple
@@ -172,26 +203,28 @@ class RecordWIP:
             "Must instantiate with `gamma` specified for binary labels!"
 
         sequences = {}
-        for b in sorted(self.rungs):
-
-            if binary:
-                targets = self._binary_labels_from_budget(b)
-            else:
-                targets = self.rungs[b].targets
-
-            for x, y in zip(self.rungs[b].inputs, targets):
-                key = self.get_key(x)
-                ys = sequences.setdefault(key, [])
+        indices = {}
+        for t, b in enumerate(self.budgets()):
+            tau = self._threshold_from_budget(b)
+            for k, dct in self._data.items():
+                ys = sequences.setdefault(k, [])
+                ind = indices.setdefault(k, [])
+                # return np.less_equal(targets, tau)
+                pred = (b in dct)
+                if pred:
+                    value = dct[b]
+                    y = int(value <= tau) if binary else value
+                else:
+                    y = pad_value
+                ind.append(pred)
                 ys.append(y)
 
-                assert len(ys) <= self.num_rungs(), \
-                    (f"Sequence length is {len(ys)} but we've only observed "
-                     f"data for {self.num_rungs()} rung(s). "
-                     "There must be duplicate input feature vectors!")
+        if return_indices:
+            return sequences, indices
+        else:
+            return sequences
 
-        return sequences
-
-    def sequences(self, binary=True):
+    def sequences(self, pad_value=-1., binary=True):
         """
         Create a pair of lists containing 2-D input and target sequences of
         shapes ``(t_n, d)`` and ``(t_n, 1)``, respectively, where ``t_n`` is
@@ -210,22 +243,33 @@ class RecordWIP:
         target_sequences : list of array_like
             A list of 2-D target arrays with shapes ``(t_n, 1)``.
         """
-        sequences = self.sequences_dict(binary=binary)
+        sequences, indices = self.sequences_dict(pad_value=pad_value,
+                                                 binary=binary,
+                                                 return_indices=True)
 
         input_sequences = []
         target_sequences = []
-        for x, ys in sequences.items():
-            # input sequence array from shape (D,) to (t_n, D) by repeating
-            xb = np.expand_dims(x, axis=0)  # broadcast `x` before repeating
-            input_sequence = np.repeat(xb, repeats=len(ys), axis=0)
+        for k, ys in sequences.items():
+
+            T = len(ys)
+            D = len(k)
+
+            ind = indices[k]
+            x = np.array(k)
+
+            input_sequence = np.full(shape=(T, D), fill_value=pad_value,
+                                     dtype="float64")
+            input_sequence[ind] = x
             input_sequences.append(input_sequence)
-            # target sequence array from shape (t_n,) to (t_n, 1)
+
             target_sequence = np.expand_dims(ys, axis=-1)
             target_sequences.append(target_sequence)
 
-        return input_sequences, target_sequences
+        inputs = np.stack(input_sequences, axis=0)
+        targets = np.stack(target_sequences, axis=0)
+        return inputs, targets
 
-    def sequences_padded(self, pad_value=1e+9, binary=True):
+    def sequences_padded(self, pad_value=-1., binary=True):
         """
         Create a pair of 3-D arrays of input and target sequences of shapes
         ``(N, t_max, d)`` and ``(N, t_max, 1)``, respectively, where ``N`` is
@@ -249,7 +293,8 @@ class RecordWIP:
         targets : array_like
             A 3-D array of padded target sequences with shape ``(N, t_max, 1)``.
         """
-        input_sequences, target_sequences = self.sequences(binary=binary)
+        input_sequences, target_sequences = self.sequences(pad_value=pad_value,
+                                                           binary=binary)
         target_dtype = "int32" if binary else "float64"
         return (pad_sequences(input_sequences, dtype="float64",
                               padding="post", value=pad_value),
@@ -266,5 +311,5 @@ class RecordWIP:
         # lazy evaluation, i.e. is early stopped as soon as anything
         # returns `True`.
         # TODO(LT): We only need to look at the lowest rung.
-        return any(np.allclose(x_prev, x, rtol=rtol, atol=atol)
-                   for b in self.rungs for x_prev in self.rungs[b].inputs)
+        return any(np.allclose(np.array(k), x, rtol=rtol, atol=atol)
+                   for k in self._data)
