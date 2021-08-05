@@ -1,11 +1,6 @@
 import numpy as np
 
 
-from tensorflow.keras.preprocessing.sequence import pad_sequences
-# from collections import defaultdict, namedtuple
-# from warnings import warn
-
-
 class Record:
 
     def __init__(self):
@@ -151,6 +146,9 @@ class MultiFidelityRecord:
     def size(self):
         return sum(self.rung_sizes())
 
+    def load_feature_matrix(self):
+        return np.vstack(self._data)
+
     def num_features(self):
         return len(self._data)
 
@@ -268,41 +266,6 @@ class MultiFidelityRecord:
         inputs = np.stack(input_sequences, axis=0)
         targets = np.stack(target_sequences, axis=0)
         return inputs, targets
-
-    def sequences_padded(self, pad_value=-1., binary=True):
-        """
-        Create a pair of 3-D arrays of input and target sequences of shapes
-        ``(N, t_max, d)`` and ``(N, t_max, 1)``, respectively, where ``N`` is
-        the number of unique input feature vectors observed so far, and
-        ``t_max = max(t_n for n in N)``.
-        Parameters
-        ----------
-        gamma : float, optional
-            If not specified (default), returns sequences of continuous-valued
-            targets. Otherwise, returns *binary* labels indicating whether the
-            value is within the first `gamma`-quantile of all values observed
-            at the same rung.
-        pad_value : float, optional
-            The value used to pad undefined entries. It is important to specify
-            a value that is unlikely to appear as an input feature, for example
-            an implausibly small or large value (default 1e+9).
-        Returns
-        -------
-        inputs : array_like
-            A 3-D array of padded input sequences with shape ``(N, t_max, d)``.
-        targets : array_like
-            A 3-D array of padded target sequences with shape ``(N, t_max, 1)``.
-        """
-        input_sequences, target_sequences = self.sequences(pad_value=pad_value,
-                                                           binary=binary)
-        target_dtype = "int32" if binary else "float64"
-        return (pad_sequences(input_sequences, dtype="float64",
-                              padding="post", value=pad_value),
-                # TODO(LT): We don't strictly need to use `pad_sequences` for
-                # the targets. The fact that we are using it might cause some
-                # confusion...
-                pad_sequences(target_sequences, dtype=target_dtype,
-                              padding="post", value=pad_value))
 
     def is_duplicate(self, x, rtol=1e-5, atol=1e-8):
         # Clever ways of doing this would involve data structs. like KD-trees
