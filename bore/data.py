@@ -223,24 +223,7 @@ class MultiFidelityRecord:
             return sequences
 
     def sequences(self, pad_value=-1., binary=True):
-        """
-        Create a pair of lists containing 2-D input and target sequences of
-        shapes ``(t_n, d)`` and ``(t_n, 1)``, respectively, where ``t_n`` is
-        the length of the `n`-th sequence.
-        Parameters
-        ----------
-        gamma : float, optional
-            If not specified (default), returns sequences of continuous-valued
-            targets. Otherwise, returns *binary* labels indicating whether the
-            value is within the first `gamma`-quantile of all values observed
-            at the same rung.
-        Returns
-        -------
-        input_sequences : list of array_like
-            A list of 2-D input arrays with shapes ``(t_n, d)``.
-        target_sequences : list of array_like
-            A list of 2-D target arrays with shapes ``(t_n, 1)``.
-        """
+
         sequences, indices = self.sequences_dict(pad_value=pad_value,
                                                  binary=binary,
                                                  return_indices=True)
