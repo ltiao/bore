@@ -4,6 +4,7 @@ from sklearn.utils import check_random_state
 from .utils import from_bounds
 
 
+# TODO(LT): Deprecated until minor bug fixed.
 def multi_start(minimizer_fn=minimize):
 
     def new_minimizer(fn, bounds, num_starts, num_samples=None,

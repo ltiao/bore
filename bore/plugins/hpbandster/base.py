@@ -9,8 +9,9 @@ from hpbandster.optimizers.hyperband import HyperBand
 from hpbandster.core.base_config_generator import base_config_generator
 
 from .types import DenseConfigurationSpace, array_from_dict, dict_from_array
-from ...data import Record
 from ...base import maybe_distort
+from ...math import steps_per_epoch
+from ...data import Record
 from ...models import MaximizableDenseSequential
 
 
@@ -141,13 +142,7 @@ class ClassifierConfigGenerator(base_config_generator):
         self.seed = seed
         self.random_state = np.random.RandomState(seed)
 
-    def _get_steps_per_epoch(self, dataset_size):
-        steps_per_epoch = int(np.ceil(np.true_divide(dataset_size,
-                                                     self.batch_size)))
-        return steps_per_epoch
-
     def _build_compile_network(self):
-
         self.logger.debug("Building and compiling network...")
         network = MaximizableDenseSequential(transform=self.transform,
                                              input_dim=self.input_dim,
@@ -161,7 +156,6 @@ class ClassifierConfigGenerator(base_config_generator):
         network.compile(optimizer=self.optimizer, metrics=["accuracy"],
                         loss=BinaryCrossentropy(from_logits=True))
         network.summary(print_fn=self.logger.debug)
-
         return network
 
     def _update_classifier(self):
@@ -169,11 +163,11 @@ class ClassifierConfigGenerator(base_config_generator):
         X, z = self.record.load_classification_data(self.gamma)
 
         dataset_size = self.record.size()
-        steps_per_epoch = self._get_steps_per_epoch(dataset_size)
+        num_steps = steps_per_epoch(dataset_size, self.batch_size)
 
         num_epochs = self.num_epochs
         if num_epochs is None:
-            num_epochs = self.num_steps_per_iter // steps_per_epoch
+            num_epochs = self.num_steps_per_iter // num_steps
             self.logger.debug("Argument `num_epochs` has not been specified. "
                               f"Setting num_epochs={num_epochs}")
         else:
@@ -195,7 +189,7 @@ class ClassifierConfigGenerator(base_config_generator):
                          f"accuracy={accuracy:.3f}] "
                          f"dataset size: {dataset_size}, "
                          f"batch size: {self.batch_size}, "
-                         f"steps per epoch: {steps_per_epoch}, "
+                         f"steps per epoch: {num_steps}, "
                          f"num steps per iter: {self.num_steps_per_iter}, "
                          f"num epochs: {num_epochs}")
 
@@ -283,7 +277,7 @@ class ClassifierConfigGenerator(base_config_generator):
 
         super(ClassifierConfigGenerator, self).new_result(job)
 
-        # TODO(LT): support multi-fidelity
+        # We do not actually do anything with the budget
         budget = job.kwargs["budget"]
 
         config_dict = job.kwargs["config"]
