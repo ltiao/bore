@@ -289,6 +289,7 @@ class SequenceClassifierConfigGenerator(base_config_generator):
                           print_fn=self.logger.debug,
                           filter_fn=self._is_unique,
                           random_state=self.random_state)
+
         if opt is None:
             # TODO(LT): It's actually important to report which of these
             # failures occurred...
