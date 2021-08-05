@@ -21,7 +21,7 @@ class MaximizableMixin:
     def maxima(self, bounds, num_starts=5, num_samples=1024, method="L-BFGS-B",
                options=dict(maxiter=1000, ftol=1e-9), random_state=None):
 
-        # TODO(LT): Deprecated until bug fixed.
+        # TODO(LT): Deprecated until minor bug fixed.
         # return minimize_multi_start(self._func_min, bounds=bounds,
         #                             num_starts=num_starts,
         #                             num_samples=num_samples,
@@ -70,9 +70,9 @@ class MaximizableMixin:
                      f"iterations: {res.nit:02d}, "
                      f"status: {res.status} ({res.message})")
 
-            # TODO(LT): Create Enum type for these status codes `status == 1`
-            # signifies maximum iteration reached, which we don't want to
-            # treat as a failure condition.
+            # TODO(LT): Create Enum type for these status codes.
+            # `status == 1` signifies maximum iteration reached, which we don't
+            # want to treat as a failure condition.
             if (res.success or res.status == 1) and filter_fn(res):
                 if res_best is None or res.fun < res_best.fun:
                     res_best = res
