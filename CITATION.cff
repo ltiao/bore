@@ -28,8 +28,8 @@ preferred-citation:
   - name: PMLR
   conference:
   - name: International Conference on Machine Learning (ICML)
-  - date-start: 2021-07-18
-  - date-end: 2021-07-24
+    date-start: 2021-07-18
+    date-end: 2021-07-24
   month: 7
   start: 10289 # First page number
   end: 10300 # Last page number
