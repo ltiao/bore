@@ -10,16 +10,27 @@ version: 2.0.4
 date-released: 2020-12-18
 url: "https://github.com/ltiao/bore"
 preferred-citation:
-  type: article
+  type: conference-paper
   authors:
-  - family-names: "Tiao"
-    given-names: "Louis"
-  - family-names: "Klein"
-    given-names: "Aaron"
-  journal: "Proceedings of the 38th International Conference on Machine Learning"
+  - family-names: Tiao
+    given-names: Louis
+  - family-names: Klein
+    given-names: Aaron
+  title: "BORE: Bayesian Optimization by Density-Ratio Estimation"
+  year: 2021
+  collection-title: "Proceedings of the 38th International Conference on Machine Learning"
+  editors:
+  - family-names: Meila
+    given-names: Marina
+  - family-names: Zhang
+    given-names: Tong
+  publisher:
+  - name: PMLR
+  conference:
+  - name: International Conference on Machine Learning (ICML)
+  - date-start: 2021-07-18
+  - date-end: 2021-07-24
   month: 7
   start: 10289 # First page number
   end: 10300 # Last page number
-  title: "BORE: Bayesian Optimization by Density-Ratio Estimation"
   volume: 139
-  year: 2021
