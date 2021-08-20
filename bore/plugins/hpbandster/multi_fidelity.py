@@ -197,8 +197,7 @@ class SequenceClassifierConfigGenerator(base_config_generator):
 
     def _update_classifier(self):
 
-        inputs, targets = self.record.sequences_padded(binary=True,
-                                                       pad_value=self.mask_value)
+        inputs, targets = self.record.sequences(binary=True, pad_value=self.mask_value)
         self.logger.debug(f"Input sequence shape: {inputs.shape}")
         self.logger.debug(f"Target sequence shape: {targets.shape}")
 
