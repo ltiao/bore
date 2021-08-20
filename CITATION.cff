@@ -15,7 +15,7 @@ preferred-citation:
   - family-names: "Tiao"
     given-names: "Louis"
   - family-names: "Klein"
-  given-names: "Aaron"
+    given-names: "Aaron"
   journal: "Proceedings of the 38th International Conference on Machine Learning"
   month: 7
   start: 10289 # First page number
