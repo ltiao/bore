@@ -23,7 +23,8 @@ class BORE(HyperBand):
     def __init__(self, config_space, eta=3, min_budget=0.01, max_budget=1,
                  gamma=None, num_random_init=10, random_rate=0.1, retrain=False,
                  num_starts=5, num_samples=1024, batch_size=64,
-                 num_steps_per_iter=1000, num_epochs=None, optimizer="adam",
+                 num_steps_per_iter=1000, num_epochs_per_iter=None,
+                 optimizer="adam",
                  num_layers=2, num_units=32, activation="elu", l2_factor=None,
                  transform="sigmoid", method="L-BFGS-B", max_iter=1000,
                  ftol=1e-9, distortion=None, seed=None, **kwargs):
@@ -41,7 +42,7 @@ class BORE(HyperBand):
                                                            optimizer=optimizer),
                                        fit_kws=dict(batch_size=batch_size,
                                                     num_steps_per_iter=num_steps_per_iter,
-                                                    num_epochs=num_epochs),
+                                                    num_epochs_per_iter=num_epochs_per_iter),
                                        optimizer_kws=dict(transform=transform,
                                                           method=method,
                                                           max_iter=max_iter,
@@ -120,7 +121,7 @@ class ClassifierConfigGenerator(base_config_generator):
         # Options for fitting neural network parameters
         self.batch_size = fit_kws.get("batch_size", 64)
         self.num_steps_per_iter = fit_kws.get("num_steps_per_iter", 100)
-        self.num_epochs = fit_kws.get("num_epochs")
+        self.num_epochs_per_iter = fit_kws.get("num_epochs_per_iter")
 
         # Options for maximizing the acquisition function
 
@@ -165,14 +166,14 @@ class ClassifierConfigGenerator(base_config_generator):
         dataset_size = self.record.size()
         num_steps = steps_per_epoch(dataset_size, self.batch_size)
 
-        num_epochs = self.num_epochs
-        if num_epochs is None:
-            num_epochs = self.num_steps_per_iter // num_steps
-            self.logger.debug("Argument `num_epochs` has not been specified. "
-                              f"Setting num_epochs={num_epochs}")
+        num_epochs_per_iter = self.num_epochs_per_iter
+        if num_epochs_per_iter is None:
+            num_epochs_per_iter = self.num_steps_per_iter // num_steps
+            self.logger.debug("Argument `num_epochs_per_iter` has not been specified. "
+                              f"Setting num_epochs_per_iter={num_epochs_per_iter}")
         else:
-            self.logger.debug("Argument `num_epochs` is specified "
-                              f"(num_epochs={num_epochs}). "
+            self.logger.debug("Argument `num_epochs_per_iter` is specified "
+                              f"(num_epochs_per_iter={num_epochs_per_iter}). "
                               f"Ignoring num_steps_per_iter={self.num_steps_per_iter}")
 
         callbacks = []
@@ -181,7 +182,7 @@ class ClassifierConfigGenerator(base_config_generator):
         #                                verbose=True, patience=5, mode="min")
         # callbacks.append(early_stopping)
 
-        self.logit.fit(X, z, epochs=num_epochs, batch_size=self.batch_size,
+        self.logit.fit(X, z, epochs=num_epochs_per_iter, batch_size=self.batch_size,
                        callbacks=callbacks, verbose=False)  # TODO(LT): Make this an argument
         loss, accuracy = self.logit.evaluate(X, z, verbose=False)
 
@@ -191,7 +192,7 @@ class ClassifierConfigGenerator(base_config_generator):
                          f"batch size: {self.batch_size}, "
                          f"steps per epoch: {num_steps}, "
                          f"num steps per iter: {self.num_steps_per_iter}, "
-                         f"num epochs: {num_epochs}")
+                         f"num epochs: {num_epochs_per_iter}")
 
     def _maybe_create_classifier(self):
         # Build neural network probabilistic classifier
