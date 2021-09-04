@@ -130,8 +130,7 @@ class ClassifierConfigGenerator(base_config_generator):
             f"`transform` must be one of {tuple(TRANSFORMS.keys())}"
         self.transform = TRANSFORMS.get(transform_name)
 
-        assert optimizer_kws.get("num_starts") > 0
-        self.num_starts = optimizer_kws.get("num_starts", 5)
+        self.num_starts = optimizer_kws.get("num_starts")
         self.num_samples = optimizer_kws.get("num_samples", 1024)
         self.method = optimizer_kws.get("method", "L-BFGS-B")
         self.ftol = optimizer_kws.get("ftol", 1e-9)
