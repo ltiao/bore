@@ -1,7 +1,7 @@
 import numpy as np
 import tensorflow as tf
 
-from scipy.optimize import minimize
+from scipy.optimize import minimize, OptimizeResult
 from sklearn.utils import check_random_state
 
 from .base import convert
@@ -20,7 +20,8 @@ class MaximizableMixin:
         self._func_min = convert(self, transform=lambda u: transform(-u))
 
     def maxima(self, bounds, num_starts=5, num_samples=1024, method="L-BFGS-B",
-               options=dict(maxiter=1000, ftol=1e-9), random_state=None):
+               options=dict(maxiter=1000, ftol=1e-9), print_fn=print,
+               random_state=None):
 
         # TODO(LT): Deprecated until minor bug fixed.
         # return minimize_multi_start(self._func_min, bounds=bounds,
@@ -31,10 +32,9 @@ class MaximizableMixin:
 
         random_state = check_random_state(random_state)
 
-        if num_samples is None:
-            num_samples = num_starts
-
-        assert num_samples >= num_starts, \
+        assert num_samples is not None, "`num_samples` must be specified!"
+        assert num_samples > 0, "`num_samples` must be positive integer!"
+        assert num_starts is None or num_samples >= num_starts, \
             "number of random samples (`num_samples`) must be " \
             "greater than number of starting points (`num_starts`)"
 
@@ -45,20 +45,28 @@ class MaximizableMixin:
         X_init = random_state.uniform(low=low, high=high, size=(num_samples, dim))
         y_init = self.predict(X_init).squeeze(axis=-1)
 
-        # ind = y_init.argsort()
-        ind = np.argpartition(y_init, kth=num_starts, axis=None)
-
         results = []
-        for i in range(num_starts):
-            x0 = X_init[ind[i]]
-            result = minimize(self._func_min, x0=x0, method=method,
-                              jac=True, bounds=bounds, options=options)
-            results.append(result)
+        if num_starts is not None and num_starts > 0:
+            ind = np.argpartition(y_init, kth=num_starts-1, axis=None)
+            for i in range(num_starts):
+                x0 = X_init[ind[i]]
+                result = minimize(self._func_min, x0=x0, method=method,
+                                  jac=True, bounds=bounds, options=options)
+                results.append(result)
+                # TODO(LT): Make this message a customizable option.
+                print_fn(f"[Maximum {i+1:02d}: value={result.fun:.3f}] "
+                         f"success: {result.success}, "
+                         f"iterations: {result.nit:02d}, "
+                         f"status: {result.status} ({result.message})")
+        else:
+            for i in range(num_samples):
+                result = OptimizeResult(x=X_init[i], fun=y_init[i],
+                                        success=True)
+                results.append(result)
 
         return results
 
-    def argmax(self, bounds, print_fn=print, filter_fn=lambda res: True,
-               *args, **kwargs):
+    def argmax(self, bounds, filter_fn=lambda res: True, *args, **kwargs):
 
         # Equivalent to:
         # res_best = min(filter(lambda res: res.success or res.status == 1,
@@ -66,12 +74,6 @@ class MaximizableMixin:
         #                key=lambda res: res.fun)
         res_best = None
         for i, res in enumerate(self.maxima(bounds, *args, **kwargs)):
-
-            print_fn(f"[Maximum {i+1:02d}: value={res.fun:.3f}] "
-                     f"success: {res.success}, "
-                     f"iterations: {res.nit:02d}, "
-                     f"status: {res.status} ({res.message})")
-
             # TODO(LT): Create Enum type for these status codes.
             # `status == 1` signifies maximum iteration reached, which we don't
             # want to treat as a failure condition.
