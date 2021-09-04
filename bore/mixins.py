@@ -1,3 +1,4 @@
+import numpy as np
 import tensorflow as tf
 
 from scipy.optimize import minimize
@@ -42,14 +43,15 @@ class MaximizableMixin:
         # TODO(LT): Allow alternative arbitary generator function callbacks
         # to support e.g. Gaussian sampling, low-discrepancy sequences, etc.
         X_init = random_state.uniform(low=low, high=high, size=(num_samples, dim))
-        y_init = self.predict(X_init)
+        y_init = self.predict(X_init).squeeze(axis=-1)
 
-        ind = y_init.squeeze(axis=-1).argsort()
+        # ind = y_init.argsort()
+        ind = np.argpartition(y_init, kth=num_starts, axis=None)
 
         results = []
         for i in range(num_starts):
-            x_init = X_init[ind[i]]
-            result = minimize(self._func_min, x0=x_init, method=method,
+            x0 = X_init[ind[i]]
+            result = minimize(self._func_min, x0=x0, method=method,
                               jac=True, bounds=bounds, options=options)
             results.append(result)
 
