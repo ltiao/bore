@@ -34,7 +34,11 @@ class MaximizableMixin:
 
         assert num_samples is not None, "`num_samples` must be specified!"
         assert num_samples > 0, "`num_samples` must be positive integer!"
-        assert num_starts is None or num_samples >= num_starts, \
+
+        assert num_starts is not None, "`num_starts` must be specified!"
+        assert num_starts >= 0, "`num_starts` must be nonnegative integer!"
+
+        assert num_samples >= num_starts, \
             "number of random samples (`num_samples`) must be " \
             "greater than number of starting points (`num_starts`)"
 
@@ -43,11 +47,13 @@ class MaximizableMixin:
         # TODO(LT): Allow alternative arbitary generator function callbacks
         # to support e.g. Gaussian sampling, low-discrepancy sequences, etc.
         X_init = random_state.uniform(low=low, high=high, size=(num_samples, dim))
-        y_init = self.predict(X_init).squeeze(axis=-1)
+        z_init = self.predict(X_init).squeeze(axis=-1)
+        # the function to minimize is negative of the classifier output
+        f_init = - z_init
 
         results = []
-        if num_starts is not None and num_starts > 0:
-            ind = np.argpartition(y_init, kth=num_starts-1, axis=None)
+        if num_starts > 0:
+            ind = np.argpartition(f_init, kth=num_starts-1, axis=None)
             for i in range(num_starts):
                 x0 = X_init[ind[i]]
                 result = minimize(self._func_min, x0=x0, method=method,
@@ -59,10 +65,9 @@ class MaximizableMixin:
                          f"iterations: {result.nit:02d}, "
                          f"status: {result.status} ({result.message})")
         else:
-            for i in range(num_samples):
-                result = OptimizeResult(x=X_init[i], fun=y_init[i],
-                                        success=True)
-                results.append(result)
+            i = np.argmin(f_init, axis=None)
+            result = OptimizeResult(x=X_init[i], fun=f_init[i], success=True)
+            results.append(result)
 
         return results
 
