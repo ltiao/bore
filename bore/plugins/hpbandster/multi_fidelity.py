@@ -21,8 +21,8 @@ class BOREHyperband(HyperBand):
     def __init__(self, config_space, eta=3, min_budget=0.01, max_budget=1,
                  gamma=None, num_random_init=10, random_rate=0.1, retrain=False,
                  num_starts=5, num_samples=1024, batch_size=64,
-                 num_steps_per_iter=1000, num_epochs=None, optimizer="adam",
-                 mask_value=-1.,
+                 num_steps_per_iter=1000, num_epochs_per_iter=None,
+                 optimizer="adam", mask_value=-1.,
                  num_layers=2, num_units=32, activation="elu", l2_factor=None,
                  transform="sigmoid", method="L-BFGS-B", max_iter=1000,
                  ftol=1e-9, distortion=None, seed=None, **kwargs):
@@ -30,31 +30,31 @@ class BOREHyperband(HyperBand):
         if gamma is None:
             gamma = 1/eta
 
-        cg = SequenceClassifierConfigGenerator(config_space=config_space,
-                                               gamma=gamma,
-                                               num_random_init=num_random_init,
-                                               random_rate=random_rate,
-                                               retrain=retrain,
-                                               classifier_kws=dict(
-                                                num_layers=num_layers,
-                                                num_units=num_units,
-                                                l2_factor=l2_factor,
-                                                activation=activation,
-                                                optimizer=optimizer,
-                                                mask_value=mask_value),
-                                               fit_kws=dict(
-                                                batch_size=batch_size,
-                                                num_steps_per_iter=num_steps_per_iter,
-                                                num_epochs=num_epochs),
-                                               optimizer_kws=dict(
-                                                transform=transform,
-                                                method=method,
-                                                max_iter=max_iter,
-                                                ftol=ftol,
-                                                distortion=distortion,
-                                                num_starts=num_starts,
-                                                num_samples=num_samples),
-                                               seed=seed)
+        cg = RecurrentClassifierConfigGenerator(config_space=config_space,
+                                                gamma=gamma,
+                                                num_random_init=num_random_init,
+                                                random_rate=random_rate,
+                                                retrain=retrain,
+                                                classifier_kws=dict(
+                                                 num_layers=num_layers,
+                                                 num_units=num_units,
+                                                 l2_factor=l2_factor,
+                                                 activation=activation,
+                                                 optimizer=optimizer,
+                                                 mask_value=mask_value),
+                                                fit_kws=dict(
+                                                 batch_size=batch_size,
+                                                 num_steps_per_iter=num_steps_per_iter,
+                                                 num_epochs_per_iter=num_epochs_per_iter),
+                                                optimizer_kws=dict(
+                                                 transform=transform,
+                                                 method=method,
+                                                 max_iter=max_iter,
+                                                 ftol=ftol,
+                                                 distortion=distortion,
+                                                 num_starts=num_starts,
+                                                 num_samples=num_samples),
+                                                seed=seed)
         # (LT): Note this is using the *grandparent* class initializer to
         # replace the config_generator!
         super(HyperBand, self).__init__(config_generator=cg, **kwargs)
@@ -85,12 +85,12 @@ class BOREHyperband(HyperBand):
         self.config.update(conf)
 
 
-class SequenceClassifierConfigGenerator(base_config_generator):
+class RecurrentClassifierConfigGenerator(base_config_generator):
 
     def __init__(self, config_space, gamma, num_random_init, random_rate,
                  retrain, classifier_kws, fit_kws, optimizer_kws, seed, **kwargs):
 
-        super(SequenceClassifierConfigGenerator, self).__init__(**kwargs)
+        super(RecurrentClassifierConfigGenerator, self).__init__(**kwargs)
 
         assert 0. < gamma < 1., "`gamma` must be in (0, 1)"
         assert num_random_init > 0, "number of initial random designs " \
@@ -142,8 +142,8 @@ class SequenceClassifierConfigGenerator(base_config_generator):
 
         # Options for fitting neural network parameters
         self.batch_size = fit_kws.get("batch_size", 64)
-        self.num_steps_per_iter = fit_kws.get("num_steps_per_iter", 100)
-        self.num_epochs = fit_kws.get("num_epochs")
+        self.num_steps_per_iter = fit_kws.get("num_steps_per_iter", 50)
+        self.num_epochs_per_iter = fit_kws.get("num_epochs_per_iter")
 
         # Options for maximizing the acquisition function
 
@@ -152,8 +152,7 @@ class SequenceClassifierConfigGenerator(base_config_generator):
             f"`transform` must be one of {tuple(TRANSFORMS.keys())}"
         self.transform = TRANSFORMS.get(transform_name)
 
-        assert optimizer_kws.get("num_starts") > 0
-        self.num_starts = optimizer_kws.get("num_starts", 5)
+        self.num_starts = optimizer_kws.get("num_starts")
         self.num_samples = optimizer_kws.get("num_samples", 1024)
         self.method = optimizer_kws.get("method", "L-BFGS-B")
         self.ftol = optimizer_kws.get("ftol", 1e-9)
@@ -204,14 +203,14 @@ class SequenceClassifierConfigGenerator(base_config_generator):
         dataset_size = self.record.num_features()
         num_steps = steps_per_epoch(dataset_size, self.batch_size)
 
-        num_epochs = self.num_epochs
-        if num_epochs is None:
-            num_epochs = self.num_steps_per_iter // num_steps
-            self.logger.debug("Argument `num_epochs` has not been specified. "
-                              f"Setting num_epochs={num_epochs}")
+        num_epochs_per_iter = self.num_epochs_per_iter
+        if num_epochs_per_iter is None:
+            num_epochs_per_iter = self.num_steps_per_iter // num_steps
+            self.logger.debug("Argument `num_epochs_per_iter` has not been specified. "
+                              f"Setting num_epochs_per_iter={num_epochs_per_iter}")
         else:
-            self.logger.debug("Argument `num_epochs` is specified "
-                              f"(num_epochs={num_epochs}). "
+            self.logger.debug("Argument `num_epochs_per_iter` is specified "
+                              f"(num_epochs_per_iter={num_epochs_per_iter}). "
                               f"Ignoring num_steps_per_iter={self.num_steps_per_iter}")
 
         callbacks = []
@@ -220,7 +219,7 @@ class SequenceClassifierConfigGenerator(base_config_generator):
         #                                verbose=True, patience=5, mode="min")
         # callbacks.append(early_stopping)
 
-        self.logit.fit(inputs, targets, epochs=num_epochs,
+        self.logit.fit(inputs, targets, epochs=num_epochs_per_iter,
                        batch_size=self.batch_size, callbacks=callbacks,
                        verbose=False)
         loss, accuracy = self.logit.evaluate(inputs, targets, verbose=False)
@@ -231,7 +230,7 @@ class SequenceClassifierConfigGenerator(base_config_generator):
                          f"batch size: {self.batch_size}, "
                          # f"steps per epoch: {num_steps}, "
                          f"num steps per iter: {self.num_steps_per_iter}, "
-                         f"num epochs: {num_epochs}")
+                         f"num epochs: {num_epochs_per_iter}")
 
     def _is_unique(self, res):
         is_duplicate = self.record.is_duplicate(res.x)
@@ -312,7 +311,7 @@ class SequenceClassifierConfigGenerator(base_config_generator):
 
     def new_result(self, job, update_model=True):
 
-        super(SequenceClassifierConfigGenerator, self).new_result(job)
+        super(RecurrentClassifierConfigGenerator, self).new_result(job)
 
         budget = job.kwargs["budget"]
 
