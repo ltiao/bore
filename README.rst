@@ -114,6 +114,11 @@ Roadmap
 
 * Integration with the `Optuna <https://optuna.org/>`_ framework by implementing a `Sampler <https://optuna.readthedocs.io/en/stable/reference/generated/optuna.samplers.BaseSampler.html#optuna.samplers.BaseSampler>`_ plugin.
 
+Links and Resources
+-------------------
+
+* BORE Searcher in the `Syne Tune <https://github.com/awslabs/syne-tune>`_ framework from AWS Labs with support for variants based on numerous classifiers (XGBoost, Random Forests, etc.)
+
 Authors
 -------
 
