@@ -21,7 +21,7 @@ in Python 3 and TensorFlow 2.
 
 |featured|
 
-*Please note this repository is not being actively developed. For a more feature-complete and well-supported implementation, please check out the BORE Searcher in the `Syne Tune <https://github.com/awslabs/syne-tune>`_ framework from AWS Labs which has support for variants based on numerous classifiers (XGBoost, Random Forests, etc.)*
+Please note this repository is not being actively developed. For a more feature-complete and well-supported implementation, please check out the BORE Searcher in the `Syne Tune <https://github.com/awslabs/syne-tune>`_ framework from `AWS Labs <https://github.com/awslabs>`_, which has support for variants based on numerous classifiers (XGBoost, Random Forests, etc.)
 
 Getting Started
 ---------------
