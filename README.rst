@@ -180,7 +180,7 @@ SOFTWARE.
 
 .. |tiao| image:: http://gravatar.com/avatar/d8b59298191057fa164edf80f0743fcc?s=120
    :align: middle
-.. |klein| image:: https://via.placeholder.com/120
+.. |klein| image:: https://via.placeholder.com/120.png
    :align: middle
 .. |featured| image:: docs/_static/header_1000x618.png
    :align: middle
